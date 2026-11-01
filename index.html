@@ -86,10 +86,20 @@ footer{font-size:.8rem;color:var(--muted);border-top:1px solid var(--line);paddi
 .btn:disabled{opacity:.5;cursor:default}
 .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .plan{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.plan li label{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:12px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--line);color:var(--fg);font-size:.95rem;cursor:pointer}
-.plan input{width:20px;height:20px;accent-color:var(--etf);margin:1px 0 0}
-.plan .done b{text-decoration:line-through;color:var(--muted);font-weight:500}
+.plan>li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:12px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
+.plan input{width:20px;height:20px;accent-color:var(--etf);margin:2px 0 0;cursor:pointer}
+.plan summary{cursor:pointer;list-style:none;display:grid;gap:2px}
+.plan summary::-webkit-details-marker{display:none}
+.plan summary b{font-weight:600}
+.plan summary b::after{content:" ›";color:var(--etf);display:inline-block;transition:transform .2s}
+.plan details[open] summary b::after{transform:rotate(90deg)}
+.plan .done summary b{text-decoration:line-through;color:var(--muted);font-weight:500}
 .plan small{display:block;color:var(--muted);font-size:.82rem}
+.guide{display:grid;gap:10px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.guide ol{margin:0;padding-left:1.3em;display:grid;gap:8px;font-size:.92rem}
+.guide .tip{font-size:.85rem;color:var(--muted);background:var(--etf-soft);padding:8px 10px;border-radius:6px}
+.guide .btn{justify-self:start}
+@media (prefers-reduced-motion:reduce){.plan summary b::after{transition:none}}
 .progress{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 .progress i{display:block;height:100%;background:var(--etf)}
 .tablewrap{overflow-x:auto;padding:0}
@@ -364,14 +374,61 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
   }
 
   let LAST=null;
+  // Each mission: [id, title, short hint, steps(S) -> array of HTML strings, tip]
   const PLAN=[
-    ["move500","Ramener les 500 € du compte-titres vers le PEA","Fortuneo › Compte espèces › Virements (ou via le compte courant)."],
-    ["buyPea","Acheter l'ETF Amundi PEA Monde avec les espèces du PEA","ISIN FR001400U5Q4, ordre à cours limité, en semaine entre 9 h et 17 h 30."],
-    ["arbPer","Arbitrer les autres fonds du PER : 80 % ETF Monde, 20 % fonds euros","Linxea › Faire une opération › Arbitrage. Inclut la sortie de la gestion à horizon."],
-    ["progPer","Réorienter le versement programmé de 150 € par trimestre","Répartition 80 % ETF Amundi MSCI World, 20 % fonds euros."],
-    ["peaDate","Renseigner la date d'ouverture du PEA","Section « Mes rendez-vous », pour suivre le cap des 5 ans."],
-    ["calendar","Ajouter les rappels à l'agenda du téléphone","Bouton « Ajouter les rappels à mon agenda »."],
-    ["backup","Faire une première sauvegarde de mes données","Section « Sauvegarde » en bas de page."]
+    ["move500","Ramener les 500 € du compte-titres vers le PEA","Fortuneo › Compte espèces › Virements.",S=>[
+      "Connectez-vous à Fortuneo et ouvrez <b>Votre patrimoine</b>, puis <b>Compte espèces</b> (celui qui affiche "+eur(S.ctoCash||500)+").",
+      "Touchez <b>Virements</b>.",
+      "Comme compte à créditer, choisissez votre <b>PEA</b> s'il apparaît dans la liste. Montant : "+eur(S.ctoCash||500)+". Validez avec votre code.",
+      "Si le PEA n'apparaît pas : virez d'abord la somme vers votre compte courant, puis, depuis le compte courant, faites un nouveau virement vers le PEA.",
+      "Comptez 1 à 3 jours ouvrés. Vérifiez ensuite que le PEA affiche bien "+eur((S.ctoCash||500)+(S.peaCash||100))+" d'espèces.",
+      "Dans AssistInvest, mettez à jour « Espèces sur le PEA » et mettez « Espèces sur le compte-titres » à 0."
+    ],"Un PEA ne peut être alimenté qu'en euros, par virement depuis un compte à votre nom. Les intitulés peuvent varier légèrement selon l'appli ou le site."],
+    ["buyPea","Acheter l'ETF Amundi PEA Monde avec les espèces du PEA","ISIN FR001400U5Q4, ordre à cours limité.",S=>{
+      const cash=(S.peaCash||0)+(S.ctoCash||0), n=S.price>0?Math.floor(cash*0.99/S.price):0;
+      return [
+      "Choisissez le moment : un jour de semaine, entre <b>9 h 15 et 17 h 15</b> (on évite l'ouverture et la clôture, où les prix sont moins stables).",
+      "Fortuneo › <b>PEA</b> › <b>Passer un ordre</b>.",
+      "Dans la recherche, tapez l'ISIN <b class=\"num\">FR001400U5Q4</b>. Vérifiez le nom : <b>Amundi PEA Monde (MSCI World) UCITS ETF</b>, place Euronext Paris.",
+      "Sens : <b>Achat</b>. Quantité : <b>"+n+" parts</b> (calculé avec "+eur(cash)+" d'espèces et un prix de "+(S.price||0).toLocaleString("fr-FR")+" € ; corrigez le prix dans le calculateur si besoin).",
+      "Type d'ordre : <b>À cours limité</b>. Limite : le dernier cours affiché, arrondi un peu au-dessus (par exemple 5,52 € si le cours est 5,50 €). Validité : <b>jour</b>.",
+      "Lisez le récapitulatif : montant total et frais estimés doivent tenir dans vos espèces. Validez.",
+      "Ouvrez <b>Gestion d'ordres</b> : l'ordre doit passer à « Exécuté » en quelques secondes ou minutes. S'il ne l'est pas à la fermeture, il est annulé sans frais : recommencez le lendemain avec une limite un peu plus haute.",
+      "Notez l'achat dans le journal, puis mettez à jour « Valeur de l'ETF Monde » et « Espèces sur le PEA » dans Mes soldes."
+    ];},"Un ordre « au marché » marche aussi, mais l'ordre à cours limité vous garantit de ne jamais payer plus que le prix choisi."],
+    ["arbPer","Arbitrer les autres fonds du PER : 80 % ETF Monde, 20 % fonds euros","Linxea › Faire une opération › Arbitrage.",S=>{
+      const T=S.perEtf+S.perEuro+S.perOther, t=S.profile/100;
+      return [
+      "Connectez-vous à Linxea, ouvrez <b>Linxea Spirit PER</b>, puis <b>Faire une opération</b> › <b>Arbitrage</b>.",
+      "Côté <b>désinvestissement</b>, sélectionnez à 100 % tous les fonds sauf l'ETF Amundi MSCI World et le fonds euros : Comgest, Carmignac, Agilis, Agora, Fidelity, Franklin, Pictet, DNCA, R-co, Allianz, American Convictions, Asian Convictions et les deux FCPR.",
+      "Côté <b>réinvestissement</b>, répartissez le produit pour atteindre "+eur(t*T)+" sur l'ETF et "+eur((1-t)*T)+" sur le fonds euros. Avec vos soldes, cela donne environ <b>"+eur(Math.max(0,t*T-S.perEtf))+" vers l'ETF Amundi MSCI World</b> et <b>"+eur(Math.max(0,(1-t)*T-S.perEuro))+" vers le Fonds Euro PER Nouvelle Génération</b>.",
+      "La poche « gestion à horizon » (environ 5 %) ne se vend parfois pas dans le même écran. Si elle n'apparaît pas, cherchez « Changer de mode de gestion », ou demandez au chat Linxea de passer tout le contrat en gestion libre.",
+      "Vérifiez les frais affichés avant de valider : en gestion libre, l'arbitrage est normalement gratuit.",
+      "L'opération prend quelques jours (les FCPR parfois un peu plus). Ensuite, mettez à jour Mes soldes : « Autres fonds » à 0, et les nouveaux montants ETF et fonds euros."
+    ];},"Aucun impôt n'est dû : l'argent reste dans le PER. La petite moins-value actuelle n'est pas « perdue » : elle reste investie en actions, sur un support moins cher."],
+    ["progPer","Réorienter le versement programmé de 150 € par trimestre","Linxea › Synthèse › crayon à côté de « 150€ / trimestre ».",S=>[
+      "Dans Linxea, ouvrez le contrat puis l'onglet <b>Synthèse</b>.",
+      "Dans le bloc <b>Votre projet</b>, touchez le <b>crayon</b> à côté de « 150€ / trimestre ».",
+      "Gardez le montant de 150 €. Changez la répartition : <b>"+S.profile+" % ETF Amundi MSCI World</b>, <b>"+(100-S.profile)+" % Fonds Euro PER Nouvelle Génération</b>, 0 % partout ailleurs.",
+      "Validez avec votre code. La nouvelle répartition s'applique au prochain prélèvement."
+    ],"Si le crayon ne propose pas la répartition, passez par Faire une opération › Versements programmés."],
+    ["peaDate","Renseigner la date d'ouverture du PEA","Pour suivre le cap des 5 ans.",S=>[
+      "Fortuneo › <b>PEA</b> › menu <b>Plus</b> (⋮) › <b>Documents</b> : le relevé ou la confirmation d'ouverture indique la date.",
+      "À défaut, prenez la date de votre tout premier versement sur le PEA (visible dans l'Historique) : c'est elle qui compte fiscalement.",
+      "Saisissez-la dans AssistInvest, section « Mes rendez-vous ». L'étape se coche toute seule."
+    ],""],
+    ["calendar","Ajouter les rappels à l'agenda du téléphone","Bouton « Ajouter les rappels à mon agenda ».",S=>[
+      "Descendez à <b>Mes rendez-vous</b> et touchez <b>Ajouter les rappels à mon agenda</b>.",
+      "Un fichier <b>assistinvest-rappels.ics</b> est téléchargé. Ouvrez-le depuis la notification ou le dossier Téléchargements.",
+      "Choisissez <b>Google Agenda</b> (ou votre agenda), puis <b>Enregistrer</b> pour chaque événement : la revue annuelle chaque 5 janvier, et le bilan de fond en janvier 2030.",
+      "Sur ordinateur, double-cliquez sur le fichier : il s'ouvre dans Outlook ou Calendrier."
+    ],"Le rappel de janvier se répète tous les ans tout seul."],
+    ["backup","Faire une première sauvegarde de mes données","Section « Sauvegarde » en bas de page.",S=>[
+      "Descendez à <b>Sauvegarde</b> et touchez <b>Exporter mes données</b>.",
+      "Un fichier <b>assistinvest-sauvegarde-…json</b> arrive dans vos Téléchargements.",
+      "Mettez-le à l'abri : envoyez-le-vous par e-mail ou copiez-le dans Google Drive.",
+      "Pour restaurer sur un autre appareil : installez l'appli, puis <b>Importer une sauvegarde</b> et choisissez ce fichier."
+    ],"Refaites-le après chaque revue de janvier."]
   ];
   const fmtDate=d=>{try{return new Date(d+"T12:00:00").toLocaleDateString("fr-FR");}catch(e){return d;}};
   const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);};
@@ -381,10 +438,17 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
 
   function renderPlan(){
     const done=PLAN.filter(([id])=>S.plan[id]).length;
-    $("planLead").textContent=done===PLAN.length?"Plan terminé. Bravo, il ne reste plus qu'à suivre la routine.":`${done} étape${done>1?"s":""} sur ${PLAN.length} faite${done>1?"s":""}`;
+    $("planLead").textContent=done===PLAN.length?"Plan terminé. Bravo, il ne reste plus qu'à suivre la routine.":`${done} étape${done>1?"s":""} sur ${PLAN.length} faite${done>1?"s":""}. Touchez une mission pour voir comment la réaliser.`;
     $("planBar").style.width=(done/PLAN.length*100)+"%";
-    $("plan").innerHTML=PLAN.map(([id,t,h])=>`<li class="${S.plan[id]?"done":""}"><label for="p-${id}"><input type="checkbox" id="p-${id}" data-plan="${id}" ${S.plan[id]?"checked":""}><span><b>${t}</b><small>${S.plan[id]?"Fait le "+fmtDate(S.plan[id]):h}</small></span></label></li>`).join("");
+    const open=new Set([...document.querySelectorAll("#plan details[open]")].map(d=>d.dataset.id));
+    $("plan").innerHTML=PLAN.map(([id,t,h,steps,tip])=>`<li class="${S.plan[id]?"done":""}">
+      <input type="checkbox" id="p-${id}" data-plan="${id}" ${S.plan[id]?"checked":""} aria-label="Marquer « ${t} » comme fait">
+      <details data-id="${id}" ${open.has(id)?"open":""}><summary><b>${t}</b><small>${S.plan[id]?"Fait le "+fmtDate(S.plan[id]):h}</small></summary>
+        <div class="guide"><ol>${steps(S).map(x=>`<li>${x}</li>`).join("")}</ol>${tip?`<p class="tip">${tip}</p>`:""}
+        <button class="btn${S.plan[id]?" ghost":""}" type="button" data-planbtn="${id}">${S.plan[id]?"Marquer comme à faire":"C'est fait"}</button></div>
+      </details></li>`).join("");
   }
+
 
   function renderJournal(){
     const J=[...S.journal].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
@@ -433,6 +497,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     document.addEventListener("click",e=>{
       const t=e.target.closest("button"); if(!t)return;
       if(t.hasAttribute("data-del")){S.journal=S.journal.filter(o=>String(o.id)!==t.dataset.del);save();render();toast("Opération supprimée");}
+      if(t.hasAttribute("data-planbtn")){const id=t.dataset.planbtn; if(S.plan[id]) delete S.plan[id]; else S.plan[id]=today(); save(); render(); if(S.plan[id]) toast("Mission accomplie");}
       if(t.hasAttribute("data-review")){S.lastReview=YEAR;save();render();toast(`Revue ${YEAR} notée`);}
       if(t.hasAttribute("data-log")&&LAST){
         const d=today();
