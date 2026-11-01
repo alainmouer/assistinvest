@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F6F5C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>AssistInvest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column "carnet de bord" — summary of what to do first, then the calculator, then the details. */
+:root{
+  --bg:#F3F5F2; --surface:#FFFFFF; --fg:#14201C; --muted:#5B6964; --line:#D9DFDB;
+  --etf:#1F6F5C; --etf-soft:#D5E9E2; --euro:#A9772A; --euro-soft:#F1E4CB; --other:#9AA5A0;
+  --ok:#1F7A4D; --warn:#B26A00; --crit:#B3261E;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1412; --surface:#16201D; --fg:#E4EBE8; --muted:#97A5A0; --line:#2A3632;
+  --etf:#4DB596; --etf-soft:#1C3A31; --euro:#D9A54E; --euro-soft:#3A2F1B; --other:#6E7B76;
+  --ok:#5CC28A; --warn:#E3A13B; --crit:#F07167; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0E1412; --surface:#16201D; --fg:#E4EBE8; --muted:#97A5A0; --line:#2A3632;
+  --etf:#4DB596; --etf-soft:#1C3A31; --euro:#D9A54E; --euro-soft:#3A2F1B; --other:#6E7B76;
+  --ok:#5CC28A; --warn:#E3A13B; --crit:#F07167; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:860px;margin:0 auto;display:grid;gap:28px}
+h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:2rem;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.25rem;font-weight:700}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+p{margin:0}
+.lead{color:var(--muted);max-width:62ch}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+section{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px;min-width:0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px}
+label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+.field{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:0 10px}
+.field input,.field select{border:0;background:transparent;color:var(--fg);font:500 1rem var(--f-mono);padding:9px 0;width:100%;min-width:0;outline:none}
+.field:focus-within{border-color:var(--etf);box-shadow:0 0 0 2px var(--etf-soft)}
+.field span{color:var(--muted);font-family:var(--f-mono)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--fg);font:500 .9rem var(--f-body);padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--etf);color:var(--surface)}
+.seg button:focus-visible,button:focus-visible{outline:2px solid var(--etf);outline-offset:2px}
+.todo{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.todo li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:12px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
+.pill{font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.pill.crit{background:color-mix(in srgb,var(--crit) 15%,transparent);color:var(--crit)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.pill.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.todo b{font-weight:600}
+.todo small{display:block;color:var(--muted);font-size:.85rem;margin-top:2px}
+.bar{display:flex;height:26px;border-radius:5px;overflow:hidden;background:var(--line)}
+.bar i{display:block;height:100%;transition:width .4s}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.85rem;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:var(--c)}
+.rowlab{display:flex;justify-content:space-between;gap:10px;font-size:.85rem}
+.result{display:grid;gap:8px}
+.line{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);align-items:baseline}
+.line:last-child{border-bottom:0}
+.line .what{min-width:0}
+.line .what small{display:block;color:var(--muted);font-size:.8rem}
+.big{font-size:1.15rem;font-weight:500}
+.note{font-size:.82rem;color:var(--muted)}
+.chart{overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:320px;height:auto}
+.cal{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.cal div{padding:12px 14px;border-left:3px solid var(--etf);background:var(--surface);border-radius:0 8px 8px 0}
+.cal div:nth-child(2){border-color:var(--euro)}
+.cal div:nth-child(3){border-color:var(--other)}
+footer{font-size:.8rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+button.reset{justify-self:start;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:6px 10px;font:500 .82rem var(--f-body);cursor:pointer}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <span class="eyebrow">PER Linxea Spirit · PEA Fortuneo</span>
+    <h1>AssistInvest</h1>
+    <p class="lead">Mettez à jour vos soldes, indiquez la somme que vous voulez placer, et l'outil vous dit quoi faire. Les règles viennent de votre document de stratégie du 01/11/2026.</p>
+  </header>
+
+  <section aria-labelledby="t-todo">
+    <h2 id="t-todo">À faire maintenant</h2>
+    <ul class="todo" id="todo"></ul>
+  </section>
+
+  <section aria-labelledby="t-invest">
+    <h2 id="t-invest">J'ai de l'argent à placer</h2>
+    <div class="grid2">
+      <div class="panel">
+        <label for="amount">Somme à placer
+          <div class="field"><input id="amount" type="number" inputmode="decimal" min="0" step="50" value="1000"><span>€</span></div>
+        </label>
+        <div style="display:grid;gap:6px">
+          <span class="note">Votre tranche d'imposition</span>
+          <div class="seg" id="tmi" role="group" aria-label="Tranche d'imposition">
+            <button type="button" data-v="11">11 %</button><button type="button" data-v="30" aria-pressed="true">30 %</button><button type="button" data-v="41">41 %</button><button type="button" data-v="45">45 %</button>
+          </div>
+        </div>
+        <label for="price">Prix d'une part de l'ETF PEA (à lire sur Fortuneo)
+          <div class="field"><input id="price" type="number" inputmode="decimal" min="0.01" step="0.01" value="5.50"><span>€</span></div>
+        </label>
+        <p class="note">ETF PEA retenu : Amundi PEA Monde (MSCI World), ISIN <span class="num">FR001400U5Q4</span>.</p>
+      </div>
+      <div class="panel result" id="result" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-soldes">
+    <h2 id="t-soldes">Mes soldes</h2>
+    <div class="grid2">
+      <div class="panel">
+        <div class="rowlab"><b>PER Linxea</b><span class="num" id="perTotal"></span></div>
+        <div class="fields">
+          <label for="perEtf">ETF Amundi MSCI World<div class="field"><input id="perEtf" type="number" min="0" step="1"><span>€</span></div></label>
+          <label for="perEuro">Fonds euros<div class="field"><input id="perEuro" type="number" min="0" step="1"><span>€</span></div></label>
+          <label for="perOther">Autres fonds (à arbitrer)<div class="field"><input id="perOther" type="number" min="0" step="1"><span>€</span></div></label>
+        </div>
+        <div class="bar" id="perBar" aria-hidden="true"></div>
+        <div class="bar" id="perTargetBar" aria-hidden="true" style="height:10px"></div>
+        <div class="legend"><span style="--c:var(--etf)">ETF Monde</span><span style="--c:var(--euro)">Fonds euros</span><span style="--c:var(--other)">Autres fonds</span><span id="perTargetTxt"></span></div>
+      </div>
+      <div class="panel">
+        <div class="rowlab"><b>PEA Fortuneo</b><span class="num" id="peaTotal"></span></div>
+        <div class="fields">
+          <label for="peaEtf">Valeur de l'ETF Monde<div class="field"><input id="peaEtf" type="number" min="0" step="1"><span>€</span></div></label>
+          <label for="peaCash">Espèces sur le PEA<div class="field"><input id="peaCash" type="number" min="0" step="1"><span>€</span></div></label>
+          <label for="ctoCash">Espèces sur le compte-titres<div class="field"><input id="ctoCash" type="number" min="0" step="1"><span>€</span></div></label>
+        </div>
+        <div class="bar" id="peaBar" aria-hidden="true"></div>
+        <div class="legend"><span style="--c:var(--etf)">ETF Monde</span><span style="--c:var(--line)">Espèces non investies</span></div>
+      </div>
+    </div>
+    <div class="panel" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))">
+      <label for="retire">Année de départ en retraite<div class="field"><input id="retire" type="number" min="2027" max="2080" step="1"></div></label>
+      <div style="display:grid;gap:6px">
+        <span class="note">Profil du PER aujourd'hui</span>
+        <div class="seg" id="profile" role="group" aria-label="Profil">
+          <button type="button" data-v="80" aria-pressed="true">80/20</button><button type="button" data-v="70">70/30 (plus prudent)</button>
+        </div>
+      </div>
+    </div>
+    <button class="reset" id="reset" type="button">Remettre les soldes à zéro</button>
+  </section>
+
+  <section aria-labelledby="t-glide">
+    <h2 id="t-glide">Sécurisation avant la retraite</h2>
+    <p class="lead">La part d'ETF dans le PER baisse progressivement pendant les 10 dernières années. Le point montre où vous en êtes.</p>
+    <div class="panel chart" id="glide"></div>
+  </section>
+
+  <section aria-labelledby="t-cal">
+    <h2 id="t-cal">Mes rendez-vous</h2>
+    <div class="cal" id="cal"></div>
+  </section>
+
+  <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos soldes restent enregistrés dans ce navigateur uniquement.</footer>
+</div>
+
+<script>
+(function(){
+  const DEFAULTS={perEtf:0,perEuro:0,perOther:0,peaEtf:0,peaCash:0,ctoCash:0,retire:2046,amount:1000,price:5.5,tmi:30,profile:80};
+  const KEY="assistinvest-v1";
+  let S={...DEFAULTS};
+  try{const raw=localStorage.getItem(KEY); if(raw) S={...DEFAULTS,...JSON.parse(raw)};}catch(e){}
+  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
+  const $=id=>document.getElementById(id);
+  const eur=v=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(Math.round(v));
+  const pct=v=>Math.round(v*100)+" %";
+  const NOW=new Date(); const YEAR=NOW.getFullYear();
+
+  // Glide path: % ETF in the PER by years left before retirement.
+  function targetEtf(yearsLeft){
+    const base=S.profile/100;            // 0.80 or 0.70
+    const pts=[[10,base],[10,base-0.10],[5,0.50],[0,0.30]];
+    if(yearsLeft>10) return base;
+    if(yearsLeft<=0) return 0.30;
+    if(yearsLeft>5){ const a=base-0.10; return 0.50+(a-0.50)*(yearsLeft-5)/5; }
+    return 0.30+(0.50-0.30)*yearsLeft/5;
+  }
+
+  const fields=["perEtf","perEuro","perOther","peaEtf","peaCash","ctoCash","retire","amount","price"];
+  function bind(){
+    fields.forEach(f=>{const el=$(f); el.value=S[f]; el.addEventListener("input",()=>{const v=parseFloat(el.value); S[f]=isNaN(v)?0:v; save(); render();});});
+    [["tmi","tmi"],["profile","profile"]].forEach(([id,k])=>{
+      $(id).querySelectorAll("button").forEach(b=>{
+        b.setAttribute("aria-pressed",String(+b.dataset.v===S[k]));
+        b.addEventListener("click",()=>{S[k]=+b.dataset.v; $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b))); save(); render();});
+      });
+    });
+    $("reset").addEventListener("click",()=>{["perEtf","perEuro","perOther","peaEtf","peaCash","ctoCash"].forEach(f=>{S[f]=DEFAULTS[f]; $(f).value=S[f];}); save(); render();});
+  }
+
+  function bar(el,parts,total){
+    el.innerHTML=parts.map(([v,c])=>`<i style="width:${total>0?(v/total*100):0}%;background:${c}"></i>`).join("");
+  }
+
+  function render(){
+    const yearsLeft=S.retire-YEAR;
+    const t=targetEtf(yearsLeft);
+    const perT=S.perEtf+S.perEuro+S.perOther;
+    const core=S.perEtf+S.perEuro;
+    const peaT=S.peaEtf+S.peaCash;
+    $("perTotal").textContent=eur(perT);
+    $("peaTotal").textContent=eur(peaT);
+    bar($("perBar"),[[S.perEtf,"var(--etf)"],[S.perEuro,"var(--euro)"],[S.perOther,"var(--other)"]],perT);
+    bar($("perTargetBar"),[[t,"var(--etf-soft)"],[1-t,"var(--euro-soft)"]],1);
+    $("perTargetTxt").textContent=`Bande fine : cible ${pct(t)} / ${pct(1-t)}`;
+    bar($("peaBar"),[[S.peaEtf,"var(--etf)"],[S.peaCash,"var(--line)"]],peaT);
+
+    // To-do list
+    const todo=[];
+    if(S.ctoCash>0) todo.push(["crit","Urgent",`Ramener ${eur(S.ctoCash)} du compte-titres vers le PEA`,"Compte espèces › Virements. Si le PEA n'apparaît pas, passez par votre compte courant."]);
+    if(S.perOther>0){
+      const tgtE=t*perT, tgtF=(1-t)*perT;
+      todo.push(["crit","Une fois",`Arbitrer ${eur(S.perOther)} d'autres fonds dans le PER`,`Vendre tous les autres fonds, puis : ${eur(Math.max(0,tgtE-S.perEtf))} vers l'ETF Monde et ${eur(Math.max(0,tgtF-S.perEuro))} vers le fonds euros. Linxea › Faire une opération › Arbitrage.`]);
+    }
+    const cashPea=S.peaCash+S.ctoCash;
+    if(cashPea>=300 && S.price>0){
+      const n=Math.floor(cashPea*0.99/S.price);
+      todo.push(["warn","À faire",`Investir ${eur(cashPea)} d'espèces du PEA dans l'ETF Monde`,`Environ ${n} parts à ${S.price.toLocaleString("fr-FR")} €, ordre à cours limité, en semaine entre 9 h et 17 h 30.`]);
+    } else if(cashPea>0){
+      todo.push(["ok","Attendre",`${eur(cashPea)} d'espèces sur le PEA`,"Trop peu pour un achat rentable : ajoutez-les au prochain versement."]);
+    }
+    if(S.perOther===0 && core>0){
+      const share=S.perEtf/core;
+      if(share>t+0.05 || share<t-0.05){
+        const move=Math.abs(t*core-S.perEtf);
+        todo.push(["warn","Rééquilibrer",`L'ETF pèse ${pct(share)} du PER (cible ${pct(t)})`,`Lors de la revue de janvier, arbitrer ${eur(move)} ${share>t?"de l'ETF vers le fonds euros":"du fonds euros vers l'ETF"}. Ne rien vendre d'autre.`]);
+      }
+    }
+    if(perT+peaT+S.ctoCash===0) todo.push(["warn","Premier pas","Saisissez vos soldes","Remplissez la section « Mes soldes » plus bas avec les montants lus sur Linxea et Fortuneo. Ils restent enregistrés sur cet appareil uniquement."]);
+    else if(!todo.length || todo.every(x=>x[0]==="ok")) todo.push(["ok","Tout va bien","Rien à faire avant votre prochain versement","Ne regardez pas les cours tous les jours : votre plan travaille pour vous."]);
+    $("todo").innerHTML=todo.map(([k,l,b,s])=>`<li><span class="pill ${k}">${l}</span><div><b>${b}</b><small>${s}</small></div></li>`).join("");
+
+    // Deposit calculator
+    const A=Math.max(0,S.amount);
+    const perShare=S.tmi>=30?0.5:0.3;
+    const toPer=A*perShare, toPea=A-toPer;
+    const coreAfter=(S.perOther>0?perT:core)+toPer;
+    const etfNow=S.perOther>0?t*perT:S.perEtf;  // after the planned arbitrage
+    let toEtf=Math.min(toPer,Math.max(0,t*coreAfter-etfNow));
+    const toEuro=toPer-toEtf;
+    const parts=S.price>0?Math.floor(toPea*0.99/S.price):0;
+    const tax=toPer*S.tmi/100;
+    $("result").innerHTML=`
+      <span class="eyebrow">Pour ${eur(A)}</span>
+      <div class="line"><div class="what"><b>PEA · ETF Monde</b><small>${parts} parts à environ ${S.price.toLocaleString("fr-FR")} € (on garde un peu pour le courtage)</small></div><span class="num big">${eur(toPea)}</span></div>
+      <div class="line"><div class="what"><b>PER · ETF Monde</b><small>Amundi MSCI World</small></div><span class="num big">${eur(toEtf)}</span></div>
+      <div class="line"><div class="what"><b>PER · Fonds euros</b><small>Complète le coussin vers ${pct(1-t)}</small></div><span class="num big">${eur(toEuro)}</span></div>
+      <div class="line"><div class="what"><b>Impôt en moins (estimation)</b><small>Versement PER × ${S.tmi} %, dans la limite de votre plafond</small></div><span class="num big" style="color:var(--ok)">${eur(tax)}</span></div>
+      <p class="note">Partage ${Math.round(perShare*100)} % PER / ${Math.round((1-perShare)*100)} % PEA, selon votre tranche. ${A>0&&toPea<300?"Moins de 300 € pour le PEA : regroupez avec un prochain versement pour limiter les frais.":""}</p>`;
+
+    renderGlide(yearsLeft,t);
+    renderCal();
+  }
+
+  function renderGlide(yearsLeft,t){
+    const W=720,H=230,L=48,R=16,T=16,B=40;
+    const maxY=Math.max(20,Math.min(40,yearsLeft+2));
+    const x=y=>L+(W-L-R)*(1-y/maxY);           // years left: maxY on the left, 0 on the right
+    const y=p=>T+(H-T-B)*(1-(p-0.2)/0.7);       // 20 % … 90 %
+    let d=""; for(let k=maxY;k>=0;k-=0.25){ d+=(d?"L":"M")+x(k).toFixed(1)+","+y(targetEtf(k)).toFixed(1); }
+    const grid=[0.3,0.5,0.7,0.9].map(p=>`<line x1="${L}" x2="${W-R}" y1="${y(p)}" y2="${y(p)}" stroke="var(--line)"/><text x="${L-8}" y="${y(p)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${Math.round(p*100)} %</text>`).join("");
+    const ticks=[];for(let k=0;k<=maxY;k+=5){ticks.push(`<text x="${x(k)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${S.retire-k}</text>`);}
+    const yl=Math.max(0,Math.min(maxY,yearsLeft));
+    $("glide").innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Part d'ETF cible dans le PER selon l'année">
+      ${grid}${ticks.join("")}
+      <path d="${d} L${x(0)},${y(0.2)} L${x(maxY)},${y(0.2)} Z" fill="var(--etf-soft)" opacity=".7"/>
+      <path d="${d}" fill="none" stroke="var(--etf)" stroke-width="2.5"/>
+      <circle cx="${x(yl)}" cy="${y(t)}" r="6" fill="var(--etf)" stroke="var(--surface)" stroke-width="2"/>
+      <text x="${Math.min(x(yl)+10,W-120)}" y="${y(t)-12}" font-size="12" fill="var(--fg)" font-family="IBM Plex Sans, sans-serif">${YEAR} : ${pct(t)} d'ETF</text>
+      <text x="${W-R}" y="${H-6}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">Année · retraite en ${S.retire}</text>
+    </svg>`;
+  }
+
+  function renderCal(){
+    const nextJan = NOW.getMonth()===0 ? YEAR : YEAR+1;
+    $("cal").innerHTML=`
+      <div><span class="eyebrow">À chaque versement</span><p><b>5 minutes</b></p><p class="note">Utilisez le calculateur ci-dessus, puis passez les ordres.</p></div>
+      <div><span class="eyebrow">Revue annuelle</span><p><b>Janvier ${nextJan}</b></p><p class="note">Mettre à jour les soldes, rééquilibrer si un badge le demande, lire le plafond PER sur l'avis d'impôt.</p></div>
+      <div><span class="eyebrow">Bilan de fond</span><p><b>Entre ${2026+3} et ${2026+5}</b></p><p class="note">Frais toujours compétitifs ? Changer d'assureur ? Aussi après un changement de vie.</p></div>`;
+  }
+
+  bind(); render();
+})();
+</script>
+
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}</script>
+</body>
+</html>
