@@ -267,8 +267,20 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
 
   <section aria-labelledby="t-save">
     <h2 id="t-save">Sauvegarde</h2>
-    <p class="lead">Vos données restent sur cet appareil. Exportez une sauvegarde de temps en temps, par exemple après la revue de janvier, pour pouvoir les retrouver sur un autre appareil.</p>
-    <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter mes données</button><label class="btn ghost" for="imp" style="display:inline-block">Importer une sauvegarde</label><input id="imp" type="file" accept="application/json,.json" hidden></div>
+    <p class="lead">Vos données restent sur cet appareil. Exportez une sauvegarde de temps en temps, par exemple après la revue de janvier, et rangez-la dans Google Drive ou envoyez-la-vous par e-mail. Vous pourrez la restaurer ici, sur ce téléphone ou un autre appareil.</p>
+    <div class="panel">
+      <label for="pwd">Mot de passe de la sauvegarde (facultatif, pour la chiffrer)
+        <div class="field"><input id="pwd" type="password" autocomplete="new-password" placeholder="Laisser vide pour une sauvegarde non chiffrée"></div>
+      </label>
+      <p class="note">Notez ce mot de passe en lieu sûr : sans lui, une sauvegarde chiffrée ne peut pas être restaurée, ni par vous ni par personne.</p>
+      <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter mes données</button><label class="btn ghost" for="imp" style="display:inline-block">Restaurer une sauvegarde</label><input id="imp" type="file" accept="application/json,.json" hidden></div>
+      <div id="decrypt" hidden style="display:grid;gap:8px">
+        <label for="pwd2">Cette sauvegarde est chiffrée. Mot de passe :
+          <div class="field"><input id="pwd2" type="password" autocomplete="current-password"></div>
+        </label>
+        <div class="actions"><button class="btn" type="button" id="dec">Déchiffrer et restaurer</button><button class="btn ghost" type="button" id="decCancel">Annuler</button></div>
+      </div>
+    </div>
   </section>
 
   <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos données restent enregistrées sur cet appareil uniquement.</footer>
@@ -519,6 +531,25 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     if(download("assistinvest-rappels.ics","text/calendar",body)){markPlan("calendar");save();render();toast("Fichier d'agenda créé : ouvrez-le pour ajouter les rappels");}
   }
 
+  // Optional encryption of backups: PBKDF2-SHA256 (250 000 iterations) + AES-GCM 256, all in the browser.
+  const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const unb64=str=>Uint8Array.from(atob(str),c=>c.charCodeAt(0));
+  async function keyFrom(pw,salt,iter){
+    const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+    return crypto.subtle.deriveKey({name:"PBKDF2",hash:"SHA-256",salt,iterations:iter},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+  }
+  async function encrypt(text,pw){
+    const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12)), iter=250000;
+    const key=await keyFrom(pw,salt,iter);
+    const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(text));
+    return {app:"assistinvest",v:1,enc:"AES-GCM",kdf:"PBKDF2-SHA256",iter,salt:b64(salt),iv:b64(iv),data:b64(ct)};
+  }
+  async function decrypt(o,pw){
+    const key=await keyFrom(pw,unb64(o.salt),o.iter||250000);
+    const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(o.iv)},key,unb64(o.data));
+    return new TextDecoder().decode(pt);
+  }
+
   function bindExtra(){
     document.addEventListener("change",e=>{
       const id=e.target.dataset&&e.target.dataset.plan; if(!id)return;
@@ -549,13 +580,30 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     });
     $("peaOpen").addEventListener("change",()=>{S.peaOpen=$("peaOpen").value; if(S.peaOpen) markPlan("peaDate"); save(); render();});
     $("ics").addEventListener("click",ics);
-    $("exp").addEventListener("click",()=>{if(download(`assistinvest-sauvegarde-${today()}.json`,"application/json",JSON.stringify(S,null,2))){markPlan("backup");save();render();toast("Sauvegarde exportée");}});
+    $("exp").addEventListener("click",async()=>{
+      const pw=$("pwd").value;
+      let text=JSON.stringify({app:"assistinvest",v:1,data:S},null,2), name=`assistinvest-sauvegarde-${today()}.json`;
+      if(pw){ try{ text=JSON.stringify(await encrypt(JSON.stringify(S),pw)); name=`assistinvest-sauvegarde-chiffree-${today()}.json`; }catch(e){ toast("Chiffrement impossible sur cet appareil"); return; } }
+      if(download(name,"application/json",text)){markPlan("backup");save();render();toast(pw?"Sauvegarde chiffrée exportée":"Sauvegarde exportée");}
+    });
+    let PENDING=null;
+    function restore(d){ S={...DEFAULTS,...d}; save(); fields.forEach(k=>$(k).value=S[k]); render(); toast("Sauvegarde restaurée"); }
     $("imp").addEventListener("change",()=>{
       const f=$("imp").files[0]; if(!f)return;
       const r=new FileReader();
-      r.onload=()=>{try{const d=JSON.parse(r.result); if(typeof d!=="object"||!d)throw 0; S={...DEFAULTS,...d}; save(); fields.forEach(k=>$(k).value=S[k]); render(); toast("Sauvegarde importée");}catch(err){toast("Ce fichier n'est pas une sauvegarde AssistInvest valide");}};
+      r.onload=()=>{try{
+        const d=JSON.parse(r.result); if(typeof d!=="object"||!d)throw 0;
+        if(d.enc==="AES-GCM"){PENDING=d; $("decrypt").hidden=false; $("pwd2").value=""; $("pwd2").focus(); return;}
+        restore(d.app==="assistinvest"&&d.data?d.data:d);
+      }catch(err){toast("Ce fichier n'est pas une sauvegarde AssistInvest valide");}};
       r.readAsText(f); $("imp").value="";
     });
+    $("dec").addEventListener("click",async()=>{
+      if(!PENDING)return;
+      try{ const d=JSON.parse(await decrypt(PENDING,$("pwd2").value)); PENDING=null; $("decrypt").hidden=true; restore(d); }
+      catch(e){ toast("Mot de passe incorrect"); $("pwd2").select(); }
+    });
+    $("decCancel").addEventListener("click",()=>{PENDING=null;$("decrypt").hidden=true;});
   }
 
   bind(); bindExtra(); render();
