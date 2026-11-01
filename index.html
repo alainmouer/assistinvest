@@ -115,6 +115,19 @@ td .del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-s
 .stat span{font-size:.8rem;color:var(--muted)}
 .field select{appearance:auto}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:20}
+.loupe td:nth-child(5){min-width:260px}
+@media (max-width:640px){
+  .loupe{min-width:0}
+  .loupe thead{display:none}
+  .loupe tr{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .loupe td{border:0;padding:0}
+  .loupe td:nth-child(1){grid-column:1/-1;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .loupe td:nth-child(2){grid-column:1}
+  .loupe td:nth-child(3){grid-column:2;grid-row:2;text-align:right}
+  .loupe td:nth-child(4){grid-column:1/-1}
+  .loupe td:nth-child(5){grid-column:1/-1;min-width:0;color:var(--fg)}
+}
+.loupe a,.note a{color:var(--etf)}
 button.reset{justify-self:start;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:6px 10px;font:500 .82rem var(--f-body);cursor:pointer}
 </style>
 </head>
@@ -154,7 +167,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
           </div>
         </div>
         <label for="price">Prix d'une part de l'ETF PEA (à lire sur Fortuneo)
-          <div class="field"><input id="price" type="number" inputmode="decimal" min="0.01" step="0.01" value="5.50"><span>€</span></div>
+          <div class="field"><input id="price" type="number" inputmode="decimal" min="0.01" step="0.01" value="6.30"><span>€</span></div>
         </label>
         <p class="note">ETF PEA retenu : Amundi PEA Monde (MSCI World), ISIN <span class="num">FR001400U5Q4</span>.</p>
       </div>
@@ -219,6 +232,23 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     <div class="panel tablewrap" id="jtable"></div>
   </section>
 
+  <section aria-labelledby="t-loupe">
+    <h2 id="t-loupe">Mes supports à la loupe</h2>
+    <p class="lead">Chaque support de votre portefeuille comparé à la meilleure alternative trouvée. Vérifié le 01/11/2026 ; prochaine vérification en janvier.</p>
+    <div class="panel tablewrap">
+      <table class="loupe">
+        <thead><tr><th>Compte</th><th>Support</th><th>Frais par an</th><th>Verdict</th><th>Alternative et raison</th></tr></thead>
+        <tbody>
+          <tr><td>PER</td><td><b>Amundi MSCI World Swap II UCITS ETF Dist</b><br><span class="num note">FR0010315770</span></td><td class="num">0,30 %<br><span class="note">9 Md€</span></td><td><span class="pill warn">À étudier</span></td><td><b>Amundi MSCI World UCITS ETF Acc</b> (<span class="num">IE000BI8OT95</span>) : même indice, <b>0,12 %</b>, 15,6 Md€, réinvestit les dividendes. Si Linxea Spirit PER le propose, basculez-y lors du grand arbitrage (gratuit). Gain : environ 18 € par an pour 10 000 €.</td></tr>
+          <tr><td>PER</td><td><b>Fonds Euro PER Nouvelle Génération</b></td><td class="num">3,08 % net<br><span class="note">rendement 2025</span></td><td><span class="pill ok">On garde</span></td><td>Capital garanti et rendement correct. C'est votre coussin de sécurité (20 %).</td></tr>
+          <tr><td>PER</td><td><b>10 fonds actifs</b> (Comgest, Carmignac, Agilis, Agora, Fidelity, Franklin, Pictet, DNCA, R-co, Allianz) et la poche à horizon</td><td class="num">≈ 1,5 à 2,5 %</td><td><span class="pill crit">À vendre</span></td><td>Frais 5 à 15 fois plus élevés qu'un ETF Monde, et ils se recoupent. Arbitrage vers l'ETF Monde et le fonds euros (mission 3 du plan).</td></tr>
+          <tr><td>PEA</td><td><b>Amundi PEA Monde (MSCI World) UCITS ETF</b><br><span class="num note">FR001400U5Q4</span></td><td class="num">0,20 %<br><span class="note">1,8 Md€</span></td><td><span class="pill ok">Choix retenu</span></td><td>Alternative équivalente : iShares MSCI World Swap PEA (<span class="num">IE0002XZSHO1</span>), 0,20 %, 2,4 Md€. Mêmes frais : aucune raison de changer.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Frais du contrat Linxea Spirit PER en plus : 0,50 % par an sur les unités de compte, 0,06 % par achat d'ETF, arbitrages en ligne gratuits. Sources : <a href="https://extraetf.com/fr/etf-profile/FR001400U5Q4" target="_blank" rel="noopener">extraETF</a>, <a href="https://extraetf.com/fr/etf-profile/IE000BI8OT95" target="_blank" rel="noopener">extraETF</a>, <a href="https://extraetf.com/fr/etf-profile/IE0002XZSHO1" target="_blank" rel="noopener">extraETF</a>, <a href="https://extraetf.com/de/etf-profile/FR0010315770" target="_blank" rel="noopener">extraETF</a>, <a href="https://www.linxea.com/per/linxea-spirit-per/" target="_blank" rel="noopener">Linxea</a>, <a href="https://www.investissement-pour-tous.com/etf-msci-world-linxea-spirit-2/" target="_blank" rel="noopener">Investissement Pour Tous</a>.</p>
+  </section>
+
   <section aria-labelledby="t-glide">
     <h2 id="t-glide">Sécurisation avant la retraite</h2>
     <p class="lead">La part d'ETF dans le PER baisse progressivement pendant les 10 dernières années. Le point montre où vous en êtes.</p>
@@ -246,7 +276,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
 
 <script>
 (function(){
-  const DEFAULTS={perEtf:0,perEuro:0,perOther:0,peaEtf:0,peaCash:0,ctoCash:0,retire:2046,amount:1000,price:5.5,tmi:30,profile:80,plan:{},journal:[],lastReview:0,peaOpen:""};
+  const DEFAULTS={perEtf:0,perEuro:0,perOther:0,peaEtf:0,peaCash:0,ctoCash:0,retire:2046,amount:1000,price:6.3,tmi:30,profile:80,plan:{},journal:[],lastReview:0,peaOpen:""};
   const KEY="assistinvest-v1";
   let S={...DEFAULTS};
   try{const raw=localStorage.getItem(KEY); if(raw) S={...DEFAULTS,...JSON.parse(raw)};}catch(e){}
@@ -403,13 +433,14 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       "Côté <b>désinvestissement</b>, sélectionnez à 100 % tous les fonds sauf l'ETF Amundi MSCI World et le fonds euros : Comgest, Carmignac, Agilis, Agora, Fidelity, Franklin, Pictet, DNCA, R-co, Allianz, American Convictions, Asian Convictions et les deux FCPR.",
       "Côté <b>réinvestissement</b>, répartissez le produit pour atteindre "+eur(t*T)+" sur l'ETF et "+eur((1-t)*T)+" sur le fonds euros. Avec vos soldes, cela donne environ <b>"+eur(Math.max(0,t*T-S.perEtf))+" vers l'ETF Amundi MSCI World</b> et <b>"+eur(Math.max(0,(1-t)*T-S.perEuro))+" vers le Fonds Euro PER Nouvelle Génération</b>.",
       "La poche « gestion à horizon » (environ 5 %) ne se vend parfois pas dans le même écran. Si elle n'apparaît pas, cherchez « Changer de mode de gestion », ou demandez au chat Linxea de passer tout le contrat en gestion libre.",
-      "Vérifiez les frais affichés avant de valider : en gestion libre, l'arbitrage est normalement gratuit.",
+      "Avant de valider, cherchez dans la liste des supports <b>Amundi MSCI World UCITS ETF Acc</b> (ISIN <span class=\"num\">IE000BI8OT95</span>, 0,12 % de frais). S'il est proposé, utilisez-le comme ETF Monde à la place de l'actuel, et ajoutez l'ancien ETF (FR0010315770) aux fonds à vendre. Voir « Mes supports à la loupe ».",
+      "Vérifiez les frais affichés avant de valider : en ligne, l'arbitrage est gratuit chez Linxea Spirit PER.",
       "L'opération prend quelques jours (les FCPR parfois un peu plus). Ensuite, mettez à jour Mes soldes : « Autres fonds » à 0, et les nouveaux montants ETF et fonds euros."
     ];},"Aucun impôt n'est dû : l'argent reste dans le PER. La petite moins-value actuelle n'est pas « perdue » : elle reste investie en actions, sur un support moins cher."],
     ["progPer","Réorienter le versement programmé de 150 € par trimestre","Linxea › Synthèse › crayon à côté de « 150€ / trimestre ».",S=>[
       "Dans Linxea, ouvrez le contrat puis l'onglet <b>Synthèse</b>.",
       "Dans le bloc <b>Votre projet</b>, touchez le <b>crayon</b> à côté de « 150€ / trimestre ».",
-      "Gardez le montant de 150 €. Changez la répartition : <b>"+S.profile+" % ETF Amundi MSCI World</b>, <b>"+(100-S.profile)+" % Fonds Euro PER Nouvelle Génération</b>, 0 % partout ailleurs.",
+      "Gardez le montant de 150 €. Changez la répartition : <b>"+S.profile+" % ETF Monde</b> (celui retenu à la mission 3), <b>"+(100-S.profile)+" % Fonds Euro PER Nouvelle Génération</b>, 0 % partout ailleurs.",
       "Validez avec votre code. La nouvelle répartition s'applique au prochain prélèvement."
     ],"Si le crayon ne propose pas la répartition, passez par Faire une opération › Versements programmés."],
     ["peaDate","Renseigner la date d'ouverture du PEA","Pour suivre le cap des 5 ans.",S=>[
