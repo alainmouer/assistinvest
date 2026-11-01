@@ -81,6 +81,30 @@ label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
 .cal div:nth-child(2){border-color:var(--euro)}
 .cal div:nth-child(3){border-color:var(--other)}
 footer{font-size:.8rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+.btn{border:1px solid var(--etf);background:var(--etf);color:var(--surface);border-radius:6px;padding:8px 14px;font:600 .9rem var(--f-body);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--etf)}
+.btn:disabled{opacity:.5;cursor:default}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.plan{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.plan li label{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:12px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--line);color:var(--fg);font-size:.95rem;cursor:pointer}
+.plan input{width:20px;height:20px;accent-color:var(--etf);margin:1px 0 0}
+.plan .done b{text-decoration:line-through;color:var(--muted);font-weight:500}
+.plan small{display:block;color:var(--muted);font-size:.82rem}
+.progress{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.progress i{display:block;height:100%;background:var(--etf)}
+.tablewrap{overflow-x:auto;padding:0}
+table{border-collapse:collapse;width:100%;font-size:.88rem;min-width:560px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td.amt{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td .del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:1rem;padding:0 4px}
+.empty{padding:16px;color:var(--muted);font-size:.9rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:2px}
+.stat b{font-family:var(--f-mono);font-size:1.15rem;font-weight:500}
+.stat span{font-size:.8rem;color:var(--muted)}
+.field select{appearance:auto}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:20}
 button.reset{justify-self:start;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:6px 10px;font:500 .82rem var(--f-body);cursor:pointer}
 </style>
 </head>
@@ -97,6 +121,13 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
   <section aria-labelledby="t-todo">
     <h2 id="t-todo">À faire maintenant</h2>
     <ul class="todo" id="todo"></ul>
+  </section>
+
+  <section aria-labelledby="t-plan">
+    <h2 id="t-plan">Mon plan d'action</h2>
+    <div class="rowlab"><span class="note" id="planLead"></span></div>
+    <div class="progress" aria-hidden="true"><i id="planBar"></i></div>
+    <ul class="plan" id="plan"></ul>
   </section>
 
   <section aria-labelledby="t-invest">
@@ -158,6 +189,26 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     <button class="reset" id="reset" type="button">Remettre les soldes à zéro</button>
   </section>
 
+  <section aria-labelledby="t-journal">
+    <h2 id="t-journal">Journal des opérations</h2>
+    <div class="stats" id="stats"></div>
+    <form class="panel" id="jform">
+      <div class="fields">
+        <label for="jDate">Date<div class="field"><input id="jDate" type="date" required></div></label>
+        <label for="jAcc">Compte<div class="field"><select id="jAcc"><option>PER</option><option>PEA</option><option>Compte-titres</option></select></div></label>
+        <label for="jType">Opération<div class="field"><select id="jType"><option>Versement</option><option>Achat</option><option>Vente</option><option>Arbitrage</option><option>Virement</option><option>Retrait</option></select></div></label>
+        <label for="jAmt">Montant<div class="field"><input id="jAmt" type="number" inputmode="decimal" min="0" step="0.01" required><span>€</span></div></label>
+      </div>
+      <div class="fields">
+        <label for="jSup">Support<div class="field"><input id="jSup" type="text" list="supports" placeholder="ETF Monde, fonds euros…"></div></label>
+        <label for="jNote">Note<div class="field"><input id="jNote" type="text" placeholder="Facultatif"></div></label>
+      </div>
+      <datalist id="supports"><option value="ETF Amundi MSCI World (PER)"><option value="Fonds euros (PER)"><option value="ETF Amundi PEA Monde"><option value="Espèces"></datalist>
+      <div class="actions"><button class="btn" type="submit">Ajouter au journal</button><span class="note">Les versements PER comptent dans le bilan fiscal de l'année.</span></div>
+    </form>
+    <div class="panel tablewrap" id="jtable"></div>
+  </section>
+
   <section aria-labelledby="t-glide">
     <h2 id="t-glide">Sécurisation avant la retraite</h2>
     <p class="lead">La part d'ETF dans le PER baisse progressivement pendant les 10 dernières années. Le point montre où vous en êtes.</p>
@@ -167,14 +218,25 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
   <section aria-labelledby="t-cal">
     <h2 id="t-cal">Mes rendez-vous</h2>
     <div class="cal" id="cal"></div>
+    <div class="panel" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));align-items:end">
+      <label for="peaOpen">Date d'ouverture du PEA (relevé Fortuneo)<div class="field"><input id="peaOpen" type="date"></div></label>
+      <div class="actions"><button class="btn ghost" type="button" id="ics">Ajouter les rappels à mon agenda</button></div>
+    </div>
+    <p class="note" id="peaInfo"></p>
   </section>
 
-  <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos soldes restent enregistrés dans ce navigateur uniquement.</footer>
+  <section aria-labelledby="t-save">
+    <h2 id="t-save">Sauvegarde</h2>
+    <p class="lead">Vos données restent sur cet appareil. Exportez une sauvegarde de temps en temps, par exemple après la revue de janvier, pour pouvoir les retrouver sur un autre appareil.</p>
+    <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter mes données</button><label class="btn ghost" for="imp" style="display:inline-block">Importer une sauvegarde</label><input id="imp" type="file" accept="application/json,.json" hidden></div>
+  </section>
+
+  <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos données restent enregistrées sur cet appareil uniquement.</footer>
 </div>
 
 <script>
 (function(){
-  const DEFAULTS={perEtf:0,perEuro:0,perOther:0,peaEtf:0,peaCash:0,ctoCash:0,retire:2046,amount:1000,price:5.5,tmi:30,profile:80};
+  const DEFAULTS={perEtf:0,perEuro:0,perOther:0,peaEtf:0,peaCash:0,ctoCash:0,retire:2046,amount:1000,price:5.5,tmi:30,profile:80,plan:{},journal:[],lastReview:0,peaOpen:""};
   const KEY="assistinvest-v1";
   let S={...DEFAULTS};
   try{const raw=localStorage.getItem(KEY); if(raw) S={...DEFAULTS,...JSON.parse(raw)};}catch(e){}
@@ -225,6 +287,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
 
     // To-do list
     const todo=[];
+    if(NOW.getMonth()<=1 && S.lastReview<YEAR) todo.push(["warn","Revue annuelle",`C'est le moment de votre revue ${YEAR}`,`Mettez à jour vos soldes, regardez le badge de rééquilibrage ci-dessous et notez votre plafond PER sur l'avis d'impôt. <button class="btn ghost" type="button" data-review style="margin-top:8px">J'ai fait ma revue ${YEAR}</button>`]);
     if(S.ctoCash>0) todo.push(["crit","Urgent",`Ramener ${eur(S.ctoCash)} du compte-titres vers le PEA`,"Compte espèces › Virements. Si le PEA n'apparaît pas, passez par votre compte courant."]);
     if(S.perOther>0){
       const tgtE=t*perT, tgtF=(1-t)*perT;
@@ -258,16 +321,19 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     const toEuro=toPer-toEtf;
     const parts=S.price>0?Math.floor(toPea*0.99/S.price):0;
     const tax=toPer*S.tmi/100;
+    LAST={toPea,toEtf,toEuro,parts};
     $("result").innerHTML=`
       <span class="eyebrow">Pour ${eur(A)}</span>
       <div class="line"><div class="what"><b>PEA · ETF Monde</b><small>${parts} parts à environ ${S.price.toLocaleString("fr-FR")} € (on garde un peu pour le courtage)</small></div><span class="num big">${eur(toPea)}</span></div>
       <div class="line"><div class="what"><b>PER · ETF Monde</b><small>Amundi MSCI World</small></div><span class="num big">${eur(toEtf)}</span></div>
       <div class="line"><div class="what"><b>PER · Fonds euros</b><small>Complète le coussin vers ${pct(1-t)}</small></div><span class="num big">${eur(toEuro)}</span></div>
       <div class="line"><div class="what"><b>Impôt en moins (estimation)</b><small>Versement PER × ${S.tmi} %, dans la limite de votre plafond</small></div><span class="num big" style="color:var(--ok)">${eur(tax)}</span></div>
+      <div class="actions"><button class="btn ghost" type="button" data-log ${A>0?"":"disabled"}>Noter ces opérations dans le journal</button></div>
       <p class="note">Partage ${Math.round(perShare*100)} % PER / ${Math.round((1-perShare)*100)} % PEA, selon votre tranche. ${A>0&&toPea<300?"Moins de 300 € pour le PEA : regroupez avec un prochain versement pour limiter les frais.":""}</p>`;
 
     renderGlide(yearsLeft,t);
     renderCal();
+    renderPlan(); renderJournal(); renderPea();
   }
 
   function renderGlide(yearsLeft,t){
@@ -297,7 +363,106 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       <div><span class="eyebrow">Bilan de fond</span><p><b>Entre ${2026+3} et ${2026+5}</b></p><p class="note">Frais toujours compétitifs ? Changer d'assureur ? Aussi après un changement de vie.</p></div>`;
   }
 
-  bind(); render();
+  let LAST=null;
+  const PLAN=[
+    ["move500","Ramener les 500 € du compte-titres vers le PEA","Fortuneo › Compte espèces › Virements (ou via le compte courant)."],
+    ["buyPea","Acheter l'ETF Amundi PEA Monde avec les espèces du PEA","ISIN FR001400U5Q4, ordre à cours limité, en semaine entre 9 h et 17 h 30."],
+    ["arbPer","Arbitrer les autres fonds du PER : 80 % ETF Monde, 20 % fonds euros","Linxea › Faire une opération › Arbitrage. Inclut la sortie de la gestion à horizon."],
+    ["progPer","Réorienter le versement programmé de 150 € par trimestre","Répartition 80 % ETF Amundi MSCI World, 20 % fonds euros."],
+    ["peaDate","Renseigner la date d'ouverture du PEA","Section « Mes rendez-vous », pour suivre le cap des 5 ans."],
+    ["calendar","Ajouter les rappels à l'agenda du téléphone","Bouton « Ajouter les rappels à mon agenda »."],
+    ["backup","Faire une première sauvegarde de mes données","Section « Sauvegarde » en bas de page."]
+  ];
+  const fmtDate=d=>{try{return new Date(d+"T12:00:00").toLocaleDateString("fr-FR");}catch(e){return d;}};
+  const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);};
+  const esc=t=>String(t??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  function toast(msg){const el=document.createElement("div");el.className="toast";el.setAttribute("role","status");el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2600);}
+  function markPlan(id){if(!S.plan[id]){S.plan[id]=today();}}
+
+  function renderPlan(){
+    const done=PLAN.filter(([id])=>S.plan[id]).length;
+    $("planLead").textContent=done===PLAN.length?"Plan terminé. Bravo, il ne reste plus qu'à suivre la routine.":`${done} étape${done>1?"s":""} sur ${PLAN.length} faite${done>1?"s":""}`;
+    $("planBar").style.width=(done/PLAN.length*100)+"%";
+    $("plan").innerHTML=PLAN.map(([id,t,h])=>`<li class="${S.plan[id]?"done":""}"><label for="p-${id}"><input type="checkbox" id="p-${id}" data-plan="${id}" ${S.plan[id]?"checked":""}><span><b>${t}</b><small>${S.plan[id]?"Fait le "+fmtDate(S.plan[id]):h}</small></span></label></li>`).join("");
+  }
+
+  function renderJournal(){
+    const J=[...S.journal].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+    const y=String(YEAR);
+    const sum=(acc,types)=>S.journal.filter(o=>o.date.startsWith(y)&&o.account===acc&&types.includes(o.type)).reduce((s,o)=>s+(+o.amount||0),0);
+    const perV=sum("PER",["Versement"]), peaV=sum("PEA",["Versement","Virement"]);
+    $("stats").innerHTML=`<div class="stat"><span>Versé sur le PER en ${YEAR}</span><b>${eur(perV)}</b></div>
+      <div class="stat"><span>Impôt en moins estimé (${S.tmi} %)</span><b style="color:var(--ok)">${eur(perV*S.tmi/100)}</b></div>
+      <div class="stat"><span>Versé sur le PEA en ${YEAR}</span><b>${eur(peaV)}</b></div>
+      <div class="stat"><span>Opérations notées</span><b>${S.journal.length}</b></div>`;
+    $("jtable").innerHTML=J.length?`<table><thead><tr><th>Date</th><th>Compte</th><th>Opération</th><th>Support</th><th style="text-align:right">Montant</th><th>Note</th><th><span class="sr" hidden>Supprimer</span></th></tr></thead><tbody>${J.map(o=>`<tr><td class="num">${fmtDate(o.date)}</td><td>${esc(o.account)}</td><td>${esc(o.type)}</td><td>${esc(o.support)}</td><td class="amt">${eur(o.amount)}</td><td>${esc(o.note)}</td><td><button class="del" type="button" data-del="${o.id}" aria-label="Supprimer cette opération">×</button></td></tr>`).join("")}</tbody></table>`
+      :`<p class="empty">Aucune opération notée pour l'instant. Ajoutez votre premier versement ou achat ci-dessus, ou utilisez le bouton « Noter ces opérations » du calculateur.</p>`;
+  }
+
+  function renderPea(){
+    $("peaOpen").value=S.peaOpen||"";
+    if(!S.peaOpen){$("peaInfo").textContent="Renseignez la date d'ouverture du PEA pour suivre le cap des 5 ans.";return;}
+    const o=new Date(S.peaOpen+"T12:00:00"); const five=new Date(o); five.setFullYear(o.getFullYear()+5);
+    const days=Math.ceil((five-NOW)/86400000);
+    $("peaInfo").textContent=days>0?`Cap des 5 ans du PEA : ${five.toLocaleDateString("fr-FR")} (encore ${Math.floor(days/30.44)} mois). Avant cette date, un retrait clôture en principe le PEA.`:`Votre PEA a passé le cap des 5 ans le ${five.toLocaleDateString("fr-FR")} : les gains retirés ne paient plus d'impôt sur le revenu.`;
+  }
+
+  function addOp(o){S.journal.push({id:Date.now()+Math.random(),...o});}
+
+  function download(name,mime,text){
+    try{const url=URL.createObjectURL(new Blob([text],{type:mime}));const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);return true;}catch(e){return false;}
+  }
+
+  function ics(){
+    const next=NOW.getMonth()===0&&NOW.getDate()<5?YEAR:YEAR+1;
+    const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+    const ev=(uid,date,sum,desc,rrule)=>["BEGIN:VEVENT","UID:"+uid+"@assistinvest","DTSTAMP:"+stamp,"DTSTART;VALUE=DATE:"+date,"SUMMARY:"+sum,"DESCRIPTION:"+desc,rrule||"","BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+sum,"TRIGGER:PT9H","END:VALARM","END:VEVENT"].filter(Boolean).join("\r\n");
+    const body=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//AssistInvest//FR","CALSCALE:GREGORIAN",
+      ev("revue-annuelle",next+"0105","AssistInvest : revue annuelle (30 min)","Mettre à jour les soldes dans AssistInvest\\, rééquilibrer si besoin\\, noter le plafond PER sur l'avis d'impôt.","RRULE:FREQ=YEARLY"),
+      ev("bilan-fond",(2026+4)+"0115","AssistInvest : bilan de fond","Frais toujours compétitifs ? Changer d'assureur ou de courtier ? Revoir la stratégie.",""),
+      "END:VCALENDAR"].join("\r\n");
+    if(download("assistinvest-rappels.ics","text/calendar",body)){markPlan("calendar");save();render();toast("Fichier d'agenda créé : ouvrez-le pour ajouter les rappels");}
+  }
+
+  function bindExtra(){
+    document.addEventListener("change",e=>{
+      const id=e.target.dataset&&e.target.dataset.plan; if(!id)return;
+      if(e.target.checked) S.plan[id]=today(); else delete S.plan[id];
+      save(); render();
+    });
+    document.addEventListener("click",e=>{
+      const t=e.target.closest("button"); if(!t)return;
+      if(t.hasAttribute("data-del")){S.journal=S.journal.filter(o=>String(o.id)!==t.dataset.del);save();render();toast("Opération supprimée");}
+      if(t.hasAttribute("data-review")){S.lastReview=YEAR;save();render();toast(`Revue ${YEAR} notée`);}
+      if(t.hasAttribute("data-log")&&LAST){
+        const d=today();
+        if(LAST.toPea>0) addOp({date:d,account:"PEA",type:"Versement",support:"Espèces",amount:Math.round(LAST.toPea),note:"Versement libre"});
+        if(LAST.toPea>0) addOp({date:d,account:"PEA",type:"Achat",support:"ETF Amundi PEA Monde",amount:Math.round(LAST.toPea),note:LAST.parts+" parts environ"});
+        if(LAST.toEtf>0) addOp({date:d,account:"PER",type:"Versement",support:"ETF Amundi MSCI World (PER)",amount:Math.round(LAST.toEtf),note:"Versement libre"});
+        if(LAST.toEuro>0) addOp({date:d,account:"PER",type:"Versement",support:"Fonds euros (PER)",amount:Math.round(LAST.toEuro),note:"Versement libre"});
+        save();render();toast("Opérations notées dans le journal");
+      }
+    });
+    $("jDate").value=today();
+    $("jform").addEventListener("submit",e=>{
+      e.preventDefault();
+      const amt=parseFloat($("jAmt").value); if(!(amt>0)){$("jAmt").focus();return;}
+      addOp({date:$("jDate").value||today(),account:$("jAcc").value,type:$("jType").value,support:$("jSup").value.trim(),amount:amt,note:$("jNote").value.trim()});
+      $("jAmt").value="";$("jSup").value="";$("jNote").value="";
+      save();render();toast("Opération ajoutée");
+    });
+    $("peaOpen").addEventListener("change",()=>{S.peaOpen=$("peaOpen").value; if(S.peaOpen) markPlan("peaDate"); save(); render();});
+    $("ics").addEventListener("click",ics);
+    $("exp").addEventListener("click",()=>{if(download(`assistinvest-sauvegarde-${today()}.json`,"application/json",JSON.stringify(S,null,2))){markPlan("backup");save();render();toast("Sauvegarde exportée");}});
+    $("imp").addEventListener("change",()=>{
+      const f=$("imp").files[0]; if(!f)return;
+      const r=new FileReader();
+      r.onload=()=>{try{const d=JSON.parse(r.result); if(typeof d!=="object"||!d)throw 0; S={...DEFAULTS,...d}; save(); fields.forEach(k=>$(k).value=S[k]); render(); toast("Sauvegarde importée");}catch(err){toast("Ce fichier n'est pas une sauvegarde AssistInvest valide");}};
+      r.readAsText(f); $("imp").value="";
+    });
+  }
+
+  bind(); bindExtra(); render();
 })();
 </script>
 
