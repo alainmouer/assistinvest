@@ -267,13 +267,13 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
 
   <section aria-labelledby="t-save">
     <h2 id="t-save">Sauvegarde</h2>
-    <p class="lead">Vos données restent sur cet appareil. Exportez une sauvegarde de temps en temps, par exemple après la revue de janvier, et rangez-la dans Google Drive ou envoyez-la-vous par e-mail. Vous pourrez la restaurer ici, sur ce téléphone ou un autre appareil.</p>
+    <p class="lead">Vos données restent sur cet appareil. Exportez une sauvegarde de temps en temps, par exemple après la revue de janvier. Sur téléphone, le menu de partage s'ouvre : choisissez Drive, puis le dossier AssistInvest › Sauvegardes. Vous pourrez la restaurer ici, sur ce téléphone ou un autre appareil.</p>
     <div class="panel">
       <label for="pwd">Mot de passe de la sauvegarde (facultatif, pour la chiffrer)
         <div class="field"><input id="pwd" type="password" autocomplete="new-password" placeholder="Laisser vide pour une sauvegarde non chiffrée"></div>
       </label>
       <p class="note">Notez ce mot de passe en lieu sûr : sans lui, une sauvegarde chiffrée ne peut pas être restaurée, ni par vous ni par personne.</p>
-      <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter mes données</button><label class="btn ghost" for="imp" style="display:inline-block">Restaurer une sauvegarde</label><input id="imp" type="file" accept="application/json,.json" hidden></div>
+      <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter et partager</button><label class="btn ghost" for="imp" style="display:inline-block">Restaurer une sauvegarde</label><input id="imp" type="file" accept="application/json,.json" hidden></div>
       <div id="decrypt" hidden style="display:grid;gap:8px">
         <label for="pwd2">Cette sauvegarde est chiffrée. Mot de passe :
           <div class="field"><input id="pwd2" type="password" autocomplete="current-password"></div>
@@ -467,10 +467,10 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       "Sur ordinateur, double-cliquez sur le fichier : il s'ouvre dans Outlook ou Calendrier."
     ],"Le rappel de janvier se répète tous les ans tout seul."],
     ["backup","Faire une première sauvegarde de mes données","Section « Sauvegarde » en bas de page.",S=>[
-      "Descendez à <b>Sauvegarde</b> et touchez <b>Exporter mes données</b>.",
-      "Un fichier <b>assistinvest-sauvegarde-…json</b> arrive dans vos Téléchargements.",
-      "Mettez-le à l'abri : envoyez-le-vous par e-mail ou copiez-le dans Google Drive.",
-      "Pour restaurer sur un autre appareil : installez l'appli, puis <b>Importer une sauvegarde</b> et choisissez ce fichier."
+      "Descendez à <b>Sauvegarde</b> et touchez <b>Exporter et partager</b>.",
+      "Sur téléphone, le menu de partage s'ouvre : touchez <b>Drive</b>, choisissez le dossier <b>AssistInvest › Sauvegardes</b>, puis <b>Enregistrer</b>.",
+      "Sur ordinateur, le fichier <b>assistinvest-sauvegarde-…json</b> arrive dans vos Téléchargements : glissez-le dans le dossier <b>AssistInvest › Sauvegardes</b> de Google Drive.",
+      "Pour restaurer sur un autre appareil : installez l'appli, puis <b>Restaurer une sauvegarde</b> et choisissez ce fichier (depuis Drive si besoin)."
     ],"Refaites-le après chaque revue de janvier."]
   ];
   const fmtDate=d=>{try{return new Date(d+"T12:00:00").toLocaleDateString("fr-FR");}catch(e){return d;}};
@@ -584,7 +584,15 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       const pw=$("pwd").value;
       let text=JSON.stringify({app:"assistinvest",v:1,data:S},null,2), name=`assistinvest-sauvegarde-${today()}.json`;
       if(pw){ try{ text=JSON.stringify(await encrypt(JSON.stringify(S),pw)); name=`assistinvest-sauvegarde-chiffree-${today()}.json`; }catch(e){ toast("Chiffrement impossible sur cet appareil"); return; } }
-      if(download(name,"application/json",text)){markPlan("backup");save();render();toast(pw?"Sauvegarde chiffrée exportée":"Sauvegarde exportée");}
+      const done=how=>{markPlan("backup");save();render();toast((pw?"Sauvegarde chiffrée ":"Sauvegarde ")+how);};
+      try{
+        const file=new File([text],name,{type:"application/json"});
+        if(navigator.canShare&&navigator.canShare({files:[file]})){
+          await navigator.share({files:[file],title:"Sauvegarde AssistInvest"});
+          done("partagée : choisissez Drive, puis le dossier AssistInvest › Sauvegardes"); return;
+        }
+      }catch(e){ if(e&&e.name==="AbortError"){toast("Partage annulé");return;} }
+      if(download(name,"application/json",text)) done("enregistrée dans vos Téléchargements");
     });
     let PENDING=null;
     function restore(d){ S={...DEFAULTS,...d}; save(); fields.forEach(k=>$(k).value=S[k]); render(); toast("Sauvegarde restaurée"); }
