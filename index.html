@@ -265,6 +265,16 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     <p class="note" id="peaInfo"></p>
   </section>
 
+  <section aria-labelledby="t-sync" id="syncSec" hidden>
+    <h2 id="t-sync">Synchronisation</h2>
+    <p class="lead">Connectez chaque appareil (téléphone, ordinateur) à votre compte Google : vos données sont enregistrées dans un fichier caché de votre Google Drive, que vous seul pouvez lire, et chaque appareil récupère automatiquement la version la plus récente.</p>
+    <div class="panel">
+      <p id="syncStatus" class="note" role="status">Pas encore connecté sur cet appareil.</p>
+      <div class="actions"><button class="btn" type="button" id="syncBtn">Se connecter à Google Drive</button><button class="btn ghost" type="button" id="syncOff" hidden>Déconnecter cet appareil</button></div>
+      <p class="note">À chaque ouverture de l'appli, touchez « Synchroniser » : Google redonne l'accès pour une heure, et pendant ce temps chaque modification est envoyée toute seule.</p>
+    </div>
+  </section>
+
   <section aria-labelledby="t-save">
     <h2 id="t-save">Sauvegarde</h2>
     <p class="lead">Vos données restent sur cet appareil. Exportez une sauvegarde de temps en temps, par exemple après la revue de janvier. Sur téléphone, le menu de partage s'ouvre : choisissez Drive, puis le dossier AssistInvest › Sauvegardes. Vous pourrez la restaurer ici, sur ce téléphone ou un autre appareil.</p>
@@ -283,7 +293,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     </div>
   </section>
 
-  <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos données restent enregistrées sur cet appareil uniquement.</footer>
+  <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos données restent enregistrées sur cet appareil, et dans votre Google Drive seulement si vous activez la synchronisation.</footer>
 </div>
 
 <script>
@@ -292,7 +302,8 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
   const KEY="assistinvest-v1";
   let S={...DEFAULTS};
   try{const raw=localStorage.getItem(KEY); if(raw) S={...DEFAULTS,...JSON.parse(raw)};}catch(e){}
-  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
+  const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
+  const save=()=>{S.updatedAt=Date.now(); persist(); if(window.__syncQueue) window.__syncQueue();};
   const $=id=>document.getElementById(id);
   const eur=v=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(Math.round(v));
   const pct=v=>Math.round(v*100)+" %";
@@ -614,7 +625,95 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     $("decCancel").addEventListener("click",()=>{PENDING=null;$("decrypt").hidden=true;});
   }
 
-  bind(); bindExtra(); render();
+  function bindSync(){
+    const CLIENT_ID=""; // ID client OAuth (Google Cloud > Clients), pas secret
+    const SCOPE="https://www.googleapis.com/auth/drive.appdata", FILE="assistinvest-sync.json", API="https://www.googleapis.com";
+    const MK="assistinvest-sync"; // métadonnées propres à cet appareil
+    if(!CLIENT_ID) return;
+    $("syncSec").hidden=false;
+    let meta={}; try{meta=JSON.parse(localStorage.getItem(MK)||"{}");}catch(e){}
+    const putMeta=()=>{try{localStorage.setItem(MK,JSON.stringify(meta));}catch(e){}};
+    let token=null, exp=0, client=null, timer=null, busy=false, again=false;
+    const live=()=>token&&Date.now()<exp-60000;
+    const hm=t=>new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+    function ui(msg){
+      if(msg) $("syncStatus").textContent=msg;
+      else if(meta.on) $("syncStatus").textContent=(live()?"Connecté. ":"Connexion à renouveler. ")+(meta.last?"Dernière synchronisation : "+hm(meta.last)+".":"");
+      $("syncBtn").textContent=meta.on?"Synchroniser":"Se connecter à Google Drive";
+      $("syncOff").hidden=!meta.on;
+    }
+    function loadGis(){return new Promise((ok,ko)=>{if(window.google&&google.accounts&&google.accounts.oauth2)return ok();const sc=document.createElement("script");sc.src="https://accounts.google.com/gsi/client";sc.async=true;sc.onload=()=>ok();sc.onerror=()=>ko(new Error("gis"));document.head.appendChild(sc);});}
+    async function api(path,opt={}){
+      const r=await fetch(API+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+token}});
+      if(r.status===401){token=null;throw new Error("auth");}
+      if(!r.ok) throw new Error("http "+r.status);
+      return r;
+    }
+    async function findFile(){
+      const q=encodeURIComponent(`name='${FILE}'`);
+      const j=await (await api(`/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id)&pageSize=1`)).json();
+      return j.files&&j.files[0]?j.files[0].id:null;
+    }
+    async function upload(id){
+      const body=JSON.stringify({app:"assistinvest",v:1,updatedAt:S.updatedAt||Date.now(),data:S});
+      if(id){ await api(`/upload/drive/v3/files/${id}?uploadType=media`,{method:"PATCH",headers:{"Content-Type":"application/json"},body}); return id; }
+      const b="ai"+Math.random().toString(36).slice(2);
+      const mp=`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({name:FILE,parents:["appDataFolder"]})}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${b}--`;
+      const j=await (await api(`/upload/drive/v3/files?uploadType=multipart&fields=id`,{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+b},body:mp})).json();
+      return j.id;
+    }
+    function apply(remote){
+      S={...DEFAULTS,...remote.data,updatedAt:remote.updatedAt}; persist();
+      fields.forEach(k=>$(k).value=S[k]); if($("peaOpen")) $("peaOpen").value=S.peaOpen||"";
+      render(); toast("Données mises à jour depuis Google Drive");
+    }
+    async function sync(){
+      if(!live()) { ui(); return; }
+      if(busy){again=true;return;} busy=true;
+      try{
+        ui("Synchronisation…");
+        const id=await findFile();
+        const local=S.updatedAt||0;
+        if(!id){ meta.id=await upload(null); meta.base=local; }
+        else{
+          meta.id=id;
+          const remote=await (await api(`/drive/v3/files/${id}?alt=media`)).json();
+          const rt=remote.updatedAt||0;
+          if(rt===local){ /* déjà à jour */ }
+          else{
+            const first=meta.base==null, both=!first&&local>meta.base&&rt>meta.base;
+            let useRemote=rt>local;
+            if(first&&!local) useRemote=true;
+            else if(first||both){
+              useRemote=confirm((first?"Des données AssistInvest existent déjà dans votre Google Drive":"Les données ont été modifiées sur cet appareil et sur un autre")+` (Drive : ${hm(rt)}, cet appareil : ${local?hm(local):"aucune modification"}).\n\nOK : utiliser les données de Google Drive sur cet appareil.\nAnnuler : remplacer celles de Google Drive par celles de cet appareil.`);
+            }
+            if(useRemote) apply(remote); else await upload(id);
+          }
+          meta.base=S.updatedAt||0;
+        }
+        meta.on=true; meta.last=Date.now(); putMeta(); ui();
+      }catch(e){ ui(e.message==="auth"?"La connexion a expiré : touchez « Synchroniser ».":"Synchronisation impossible pour le moment (pas de réseau ?). Vos données restent sur cet appareil."); }
+      finally{ busy=false; if(again){again=false; sync();} }
+    }
+    window.__syncQueue=()=>{ if(!live())return; clearTimeout(timer); timer=setTimeout(sync,1500); };
+    $("syncBtn").addEventListener("click",async()=>{
+      if(live()) return sync();
+      try{ await loadGis(); }catch(e){ ui("Impossible de joindre Google. Vérifiez la connexion Internet."); return; }
+      if(!client) client=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPE,callback:r=>{
+        if(r&&r.access_token){ token=r.access_token; exp=Date.now()+(+r.expires_in||3600)*1000; sync(); }
+        else ui("Connexion refusée ou annulée.");
+      },error_callback:()=>ui("Connexion annulée.")});
+      client.requestAccessToken({prompt:meta.on?"":"consent"});
+    });
+    $("syncOff").addEventListener("click",()=>{
+      if(token&&window.google) try{google.accounts.oauth2.revoke(token,()=>{});}catch(e){}
+      token=null; meta={}; putMeta(); ui("Cet appareil n'est plus synchronisé. Vos données restent ici et dans Google Drive.");
+    });
+    document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") sync(); });
+    ui();
+  }
+
+  bind(); bindExtra(); bindSync(); render();
 })();
 </script>
 
