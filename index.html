@@ -128,10 +128,13 @@ td .del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-s
   .loupe td:nth-child(5){grid-column:1/-1;min-width:0;color:var(--fg)}
 }
 .loupe a,.note a{color:var(--etf)}
+#jform.prefill{outline:2px solid var(--etf);outline-offset:3px}
+.syncbar{position:sticky;top:0;z-index:15;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:color-mix(in srgb,var(--warn) 14%,var(--surface));border-bottom:1px solid var(--line);padding:8px 16px;font-size:.9rem}
 button.reset{justify-self:start;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:6px 10px;font:500 .82rem var(--f-body);cursor:pointer}
 </style>
 </head>
 <body>
+<div class="syncbar" id="syncBar" hidden><span>Google Drive est déconnecté sur cet appareil. Vos modifications restent ici en attendant.</span><button class="btn" type="button" id="syncBarBtn">Reconnecter et synchroniser</button></div>
 
 
 <div class="wrap">
@@ -226,7 +229,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
         <label for="jSup">Support<div class="field"><input id="jSup" type="text" list="supports" placeholder="ETF Monde, fonds euros…"></div></label>
         <label for="jNote">Note<div class="field"><input id="jNote" type="text" placeholder="Facultatif"></div></label>
       </div>
-      <datalist id="supports"><option value="ETF Amundi MSCI World (PER)"><option value="Fonds euros (PER)"><option value="ETF Amundi PEA Monde"><option value="Espèces"></datalist>
+      <datalist id="supports"><option value="ETF Amundi MSCI World Acc IE000BI8OT95 (PER)"><option value="ETF Amundi MSCI World (PER)"><option value="Fonds euros (PER)"><option value="ETF Amundi PEA Monde"><option value="Espèces"></datalist>
       <div class="actions"><button class="btn" type="submit">Ajouter au journal</button><span class="note">Les versements PER comptent dans le bilan fiscal de l'année.</span></div>
     </form>
     <div class="panel tablewrap" id="jtable"></div>
@@ -527,6 +530,24 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
 
   function addOp(o){S.journal.push({id:Date.now()+Math.random(),...o});}
 
+  // Mission cochée -> ligne de journal pré-remplie, à vérifier puis « Ajouter au journal »
+  function prefillFor(id){
+    const T=S.perEtf+S.perEuro+S.perOther, t=S.profile/100, cash=(S.peaCash||0)+(S.ctoCash||0);
+    const n=S.price>0?Math.floor(cash*0.99/S.price):0;
+    const P={
+      move500:{account:"PEA",type:"Virement",support:"Espèces",amount:S.ctoCash||500,note:"Depuis le compte-titres Fortuneo"},
+      buyPea:{account:"PEA",type:"Achat",support:"ETF Amundi PEA Monde",amount:Math.round(n*S.price*100)/100,note:n+" parts à "+(S.price||0).toLocaleString("fr-FR")+" € (à corriger avec l'avis d'exécution)"},
+      arbPer:{account:"PER",type:"Arbitrage",support:"ETF Amundi MSCI World Acc IE000BI8OT95 (PER)",amount:Math.round(S.perOther>0?S.perOther+S.perEtf:S.perEtf)||Math.round(t*T),note:"Anciens fonds vendus, réinvestis "+S.profile+" % ETF / "+(100-S.profile)+" % fonds euros"}
+    }[id];
+    if(!P) return;
+    $("jDate").value=today(); $("jAcc").value=P.account; $("jType").value=P.type;
+    $("jSup").value=P.support; $("jAmt").value=P.amount>0?P.amount:""; $("jNote").value=P.note;
+    const f=$("jform"); f.classList.add("prefill");
+    f.scrollIntoView({behavior:"smooth",block:"center"});
+    setTimeout(()=>{try{$("jAmt").focus({preventScroll:true});$("jAmt").select();}catch(e){}},400);
+    toast("Ligne de journal pré-remplie : vérifiez le montant, puis « Ajouter au journal »");
+  }
+
   function download(name,mime,text){
     try{const url=URL.createObjectURL(new Blob([text],{type:mime}));const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);return true;}catch(e){return false;}
   }
@@ -565,12 +586,12 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     document.addEventListener("change",e=>{
       const id=e.target.dataset&&e.target.dataset.plan; if(!id)return;
       if(e.target.checked) S.plan[id]=today(); else delete S.plan[id];
-      save(); render();
+      save(); render(); if(S.plan[id]) prefillFor(id);
     });
     document.addEventListener("click",e=>{
       const t=e.target.closest("button"); if(!t)return;
       if(t.hasAttribute("data-del")){S.journal=S.journal.filter(o=>String(o.id)!==t.dataset.del);save();render();toast("Opération supprimée");}
-      if(t.hasAttribute("data-planbtn")){const id=t.dataset.planbtn; if(S.plan[id]) delete S.plan[id]; else S.plan[id]=today(); save(); render(); if(S.plan[id]) toast("Mission accomplie");}
+      if(t.hasAttribute("data-planbtn")){const id=t.dataset.planbtn; if(S.plan[id]) delete S.plan[id]; else S.plan[id]=today(); save(); render(); if(S.plan[id]){ toast("Mission accomplie"); prefillFor(id); }}
       if(t.hasAttribute("data-review")){S.lastReview=YEAR;save();render();toast(`Revue ${YEAR} notée`);}
       if(t.hasAttribute("data-log")&&LAST){
         const d=today();
@@ -586,7 +607,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       e.preventDefault();
       const amt=parseFloat($("jAmt").value); if(!(amt>0)){$("jAmt").focus();return;}
       addOp({date:$("jDate").value||today(),account:$("jAcc").value,type:$("jType").value,support:$("jSup").value.trim(),amount:amt,note:$("jNote").value.trim()});
-      $("jAmt").value="";$("jSup").value="";$("jNote").value="";
+      $("jAmt").value="";$("jSup").value="";$("jNote").value="";$("jform").classList.remove("prefill");
       save();render();toast("Opération ajoutée");
     });
     $("peaOpen").addEventListener("change",()=>{S.peaOpen=$("peaOpen").value; if(S.peaOpen) markPlan("peaDate"); save(); render();});
@@ -633,7 +654,10 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     $("syncSec").hidden=false;
     let meta={}; try{meta=JSON.parse(localStorage.getItem(MK)||"{}");}catch(e){}
     const putMeta=()=>{try{localStorage.setItem(MK,JSON.stringify(meta));}catch(e){}};
+    const TK="assistinvest-sync-token"; // jeton d'accès Drive (1 h max), gardé pour survivre à un rechargement ou redémarrage
     let token=null, exp=0, client=null, timer=null, busy=false, again=false;
+    try{const k=JSON.parse(localStorage.getItem(TK)||"null"); if(k&&k.exp>Date.now()+60000){token=k.t;exp=k.exp;}}catch(e){}
+    const putTok=()=>{try{token?localStorage.setItem(TK,JSON.stringify({t:token,exp})):localStorage.removeItem(TK);}catch(e){}};
     const live=()=>token&&Date.now()<exp-60000;
     const hm=t=>new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
     function ui(msg){
@@ -641,11 +665,12 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       else if(meta.on) $("syncStatus").textContent=(live()?"Connecté. ":"Connexion à renouveler. ")+(meta.last?"Dernière synchronisation : "+hm(meta.last)+".":"");
       $("syncBtn").textContent=meta.on?"Synchroniser":"Se connecter à Google Drive";
       $("syncOff").hidden=!meta.on;
+      $("syncBar").hidden=!(meta.on&&!live());
     }
     function loadGis(){return new Promise((ok,ko)=>{if(window.google&&google.accounts&&google.accounts.oauth2)return ok();const sc=document.createElement("script");sc.src="https://accounts.google.com/gsi/client";sc.async=true;sc.onload=()=>ok();sc.onerror=()=>ko(new Error("gis"));document.head.appendChild(sc);});}
     async function api(path,opt={}){
       const r=await fetch(API+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+token}});
-      if(r.status===401){token=null;throw new Error("auth");}
+      if(r.status===401){token=null;putTok();throw new Error("auth");}
       if(!r.ok) throw new Error("http "+r.status);
       return r;
     }
@@ -696,21 +721,25 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       finally{ busy=false; if(again){again=false; sync();} }
     }
     window.__syncQueue=()=>{ if(!live())return; clearTimeout(timer); timer=setTimeout(sync,1500); };
-    $("syncBtn").addEventListener("click",async()=>{
+    async function connect(){
       if(live()) return sync();
       try{ await loadGis(); }catch(e){ ui("Impossible de joindre Google. Vérifiez la connexion Internet."); return; }
       if(!client) client=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPE,callback:r=>{
-        if(r&&r.access_token){ token=r.access_token; exp=Date.now()+(+r.expires_in||3600)*1000; sync(); }
+        if(r&&r.access_token){ token=r.access_token; exp=Date.now()+(+r.expires_in||3600)*1000; putTok(); sync(); }
         else ui("Connexion refusée ou annulée.");
       },error_callback:()=>ui("Connexion annulée.")});
       client.requestAccessToken({prompt:meta.on?"":"consent"});
-    });
+    }
+    $("syncBtn").addEventListener("click",connect);
+    $("syncBarBtn").addEventListener("click",connect);
+    if(meta.on) loadGis().catch(()=>{}); // prépare Google pour que la reconnexion tienne en un clic
+    setInterval(()=>{ if(meta.on&&!live()) ui(); },60000); // affiche le bandeau quand le jeton expire
     $("syncOff").addEventListener("click",()=>{
       if(token&&window.google) try{google.accounts.oauth2.revoke(token,()=>{});}catch(e){}
-      token=null; meta={}; putMeta(); ui("Cet appareil n'est plus synchronisé. Vos données restent ici et dans Google Drive.");
+      token=null; putTok(); meta={}; putMeta(); ui("Cet appareil n'est plus synchronisé. Vos données restent ici et dans Google Drive.");
     });
     document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") sync(); });
-    ui();
+    ui(); if(live()) sync();
   }
 
   bind(); bindExtra(); bindSync(); render();
