@@ -609,10 +609,14 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     $("ics").addEventListener("click",ics);
     $("exp").addEventListener("click",async()=>{
       const pw=$("pwd").value;
-      const at=Date.now(), data={...S,lastBackup:at};
-      let text=JSON.stringify({app:"assistinvest",v:1,data},null,2), name=`assistinvest-sauvegarde-${today()}.json`;
-      if(pw){ try{ text=JSON.stringify(await encrypt(JSON.stringify(data),pw)); name=`assistinvest-sauvegarde-chiffree-${today()}.json`; }catch(e){ toast("Chiffrement impossible sur cet appareil"); return; } }
-      const done=how=>{markPlan("backup");save();S.lastBackup=S.updatedAt;persist();render();toast((pw?"Sauvegarde chiffrée ":"Sauvegarde ")+how);};
+      // Horodatage : updatedAt = dernière modification des données (sert à comparer à l'import), exportedAt = moment de l'export.
+      const at=Date.now(), upd=S.updatedAt||at, n=new Date(at);
+      const data={...S,updatedAt:upd,plan:{...S.plan,backup:S.plan.backup||today()},lastBackup:at};
+      const stamp=`${today()}-${String(n.getHours()).padStart(2,"0")}h${String(n.getMinutes()).padStart(2,"0")}`;
+      let text=JSON.stringify({app:"assistinvest",v:1,exportedAt:at,updatedAt:upd,data},null,2), name=`assistinvest-sauvegarde-${stamp}.json`;
+      if(pw){ try{ text=JSON.stringify({...await encrypt(JSON.stringify(data),pw),exportedAt:at,updatedAt:upd}); name=`assistinvest-sauvegarde-chiffree-${stamp}.json`; }catch(e){ toast("Chiffrement impossible sur cet appareil"); return; } }
+      // Pas de save() ici : la date de modification reste celle du fichier, pour qu'il soit reconnu comme « même version ».
+      const done=how=>{S.plan=data.plan;S.updatedAt=upd;S.lastBackup=at;persist();render();toast((pw?"Sauvegarde chiffrée ":"Sauvegarde ")+how);};
       try{
         const file=new File([text],name,{type:"application/json"});
         if(navigator.canShare&&navigator.canShare({files:[file]})){
@@ -623,9 +627,18 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       if(download(name,"application/json",text)) done("enregistrée dans vos Téléchargements");
     });
     let PENDING=null;
-    function restore(d){
-      const when=d.lastBackup?" du "+new Date(d.lastBackup).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}):"";
-      if(S.updatedAt&&!confirm(`Remplacer les données de cet appareil par celles de la sauvegarde${when} ?`)){toast("Import annulé");return;}
+    const when=t=>new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).replace(/,? (\d\d):(\d\d)$/," à $1 h $2");
+    // Compare la date de modification du fichier à celle de cet appareil. Renvoie true si l'import peut continuer.
+    function okToImport(fileUpd){
+      const loc=S.updatedAt||0;
+      if(!loc) return true; // appareil vierge
+      if(!fileUpd) return confirm("Cette sauvegarde ne dit pas quand ses données ont été modifiées (ancien format).\n\nRemplacer les données de cet appareil par celles du fichier ?");
+      if(fileUpd===loc){ toast("Cet appareil a déjà cette version : rien à importer"); return false; }
+      if(fileUpd<loc) return confirm(`Attention : cette sauvegarde est plus ancienne que les données de cet appareil.\n\nSauvegarde : modifiée le ${when(fileUpd)}\nCet appareil : modifié le ${when(loc)}\n\nSi vous importez, vous perdrez vos dernières modifications. Importer quand même ?`);
+      return confirm(`Cette sauvegarde est plus récente que les données de cet appareil.\n\nSauvegarde : modifiée le ${when(fileUpd)}\nCet appareil : modifié le ${when(loc)}\n\nRemplacer les données de cet appareil par celles de la sauvegarde ?`);
+    }
+    function restore(d,checked){
+      if(!checked&&!okToImport(d.updatedAt)){ if(S.updatedAt!==d.updatedAt) toast("Import annulé"); return; }
       S={...DEFAULTS,...d}; persist(); fields.forEach(k=>$(k).value=S[k]);
       [["tmi","tmi"],["profile","profile"]].forEach(([id,k])=>$(id).querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.v===S[k]))));
       render(); toast("Sauvegarde importée");
@@ -636,14 +649,14 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       const r=new FileReader();
       r.onload=()=>{try{
         const d=JSON.parse(r.result); if(typeof d!=="object"||!d)throw 0;
-        if(d.enc==="AES-GCM"){PENDING=d; $("decrypt").hidden=false; $("pwd2").value=""; $("pwd2").focus(); return;}
+        if(d.enc==="AES-GCM"){ if(d.updatedAt&&!okToImport(d.updatedAt)){ if(S.updatedAt!==d.updatedAt) toast("Import annulé"); return; } PENDING=d; $("decrypt").hidden=false; $("pwd2").value=""; $("pwd2").focus(); return;}
         restore(d.app==="assistinvest"&&d.data?d.data:d);
       }catch(err){toast("Ce fichier n'est pas une sauvegarde AssistInvest valide");}};
       r.readAsText(f); $("imp").value="";
     });
     $("dec").addEventListener("click",async()=>{
       if(!PENDING)return;
-      try{ const d=JSON.parse(await decrypt(PENDING,$("pwd2").value)); PENDING=null; $("decrypt").hidden=true; restore(d); }
+      try{ const d=JSON.parse(await decrypt(PENDING,$("pwd2").value)); const known=!!PENDING.updatedAt; PENDING=null; $("decrypt").hidden=true; restore(d,known); }
       catch(e){ toast("Mot de passe incorrect"); $("pwd2").select(); }
     });
     $("decCancel").addEventListener("click",()=>{PENDING=null;$("decrypt").hidden=true;});
