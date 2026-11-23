@@ -268,7 +268,19 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
 
   <section aria-labelledby="t-save">
     <h2 id="t-save">Sauvegarde</h2>
-    <p class="lead">Vos données restent sur cet appareil. Pour les retrouver sur votre téléphone et votre ordinateur, exportez une sauvegarde après chaque modification importante (versement, revue de janvier), rangez-la dans Google Drive (dossier AssistInvest › Sauvegardes), puis importez-la sur l'autre appareil.</p>
+    <p class="lead">Vos données restent sur cet appareil. Sur ordinateur (Chrome ou Edge), activez la sauvegarde automatique dans votre dossier OneDrive. Sur téléphone, importez ce fichier pour vous mettre à jour, et exportez à la main si vous modifiez quelque chose depuis le téléphone.</p>
+    <div class="panel" id="autoPanel" hidden>
+      <span class="eyebrow">Sauvegarde automatique (ordinateur)</span>
+      <p id="autoStatus" class="note" role="status"></p>
+      <div id="autoSetup" style="display:grid;gap:8px">
+        <p class="note">Choisissez une fois un mot de passe et un fichier, de préférence dans votre dossier OneDrive : à chaque modification, l'appli y enregistre une sauvegarde chiffrée, toute seule. Sur le téléphone, importez ensuite ce fichier depuis OneDrive.</p>
+        <label for="aPwd">Mot de passe<div class="field"><input id="aPwd" type="password" autocomplete="new-password"></div></label>
+        <label for="aPwd2">Mot de passe, encore une fois<div class="field"><input id="aPwd2" type="password" autocomplete="new-password"></div></label>
+        <label for="aHint">Indice pour vous en souvenir (visible dans le fichier, ne mettez pas le mot de passe)<div class="field"><input id="aHint" type="text" maxlength="120" placeholder="Ex. : prénom du premier chien + année du mariage"></div></label>
+        <div class="actions"><button class="btn" type="button" id="aStart">Choisir le fichier et activer</button></div>
+      </div>
+      <div class="actions"><button class="btn" type="button" id="aResume" hidden>Reprendre la sauvegarde automatique</button><button class="btn ghost" type="button" id="aStop" hidden>Arrêter la sauvegarde automatique</button></div>
+    </div>
     <div class="panel">
       <p id="bkStatus" class="note" role="status"></p>
       <label for="pwd">Mot de passe de la sauvegarde (facultatif, pour la chiffrer)
@@ -278,6 +290,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter et partager</button><button class="btn ghost" type="button" id="impBtn">Importer une sauvegarde</button><input id="imp" type="file" hidden></div>
       <p class="note">Importer remplace les données de cet appareil par celles du fichier choisi (sur téléphone, touchez « Parcourir » ou « Drive » pour aller le chercher).</p>
       <div id="decrypt" hidden style="display:grid;gap:8px">
+        <p id="hintShow" class="note" hidden></p>
         <label for="pwd2">Cette sauvegarde est chiffrée. Mot de passe :
           <div class="field"><input id="pwd2" type="password" autocomplete="current-password"></div>
         </label>
@@ -296,7 +309,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
   let S={...DEFAULTS};
   try{const raw=localStorage.getItem(KEY); if(raw) S={...DEFAULTS,...JSON.parse(raw)};}catch(e){}
   const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
-  const save=()=>{S.updatedAt=Date.now(); persist();};
+  const save=()=>{S.updatedAt=Date.now(); persist(); if(window.__autoQueue) window.__autoQueue();};
   try{localStorage.removeItem("assistinvest-sync");localStorage.removeItem("assistinvest-sync-token");}catch(e){} // restes de l'ancienne synchro Google Drive
   const $=id=>document.getElementById(id);
   const eur=v=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(Math.round(v));
@@ -641,7 +654,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       if(!checked&&!okToImport(d.updatedAt)){ if(S.updatedAt!==d.updatedAt) toast("Import annulé"); return; }
       S={...DEFAULTS,...d}; persist(); fields.forEach(k=>$(k).value=S[k]);
       [["tmi","tmi"],["profile","profile"]].forEach(([id,k])=>$(id).querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.v===S[k]))));
-      render(); toast("Sauvegarde importée");
+      render(); toast("Sauvegarde importée"); if(window.__autoQueue) window.__autoQueue();
     }
     $("impBtn").addEventListener("click",()=>$("imp").click());
     $("imp").addEventListener("change",()=>{
@@ -649,7 +662,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       const r=new FileReader();
       r.onload=()=>{try{
         const d=JSON.parse(r.result); if(typeof d!=="object"||!d)throw 0;
-        if(d.enc==="AES-GCM"){ if(d.updatedAt&&!okToImport(d.updatedAt)){ if(S.updatedAt!==d.updatedAt) toast("Import annulé"); return; } PENDING=d; $("decrypt").hidden=false; $("pwd2").value=""; $("pwd2").focus(); return;}
+        if(d.enc==="AES-GCM"){ if(d.updatedAt&&!okToImport(d.updatedAt)){ if(S.updatedAt!==d.updatedAt) toast("Import annulé"); return; } PENDING=d; $("hintShow").hidden=!d.hint; $("hintShow").textContent=d.hint?"Votre indice : « "+d.hint+" »":""; $("decrypt").hidden=false; $("pwd2").value=""; $("pwd2").focus(); return;}
         restore(d.app==="assistinvest"&&d.data?d.data:d);
       }catch(err){toast("Ce fichier n'est pas une sauvegarde AssistInvest valide");}};
       r.readAsText(f); $("imp").value="";
@@ -662,7 +675,66 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     $("decCancel").addEventListener("click",()=>{PENDING=null;$("decrypt").hidden=true;});
   }
 
-  bind(); bindExtra(); render();
+  // Sauvegarde automatique chiffrée vers un fichier choisi une fois (Chrome/Edge sur ordinateur).
+  // Le mot de passe et l'indice restent sur cet appareil (jamais dans les exports) ; le lien vers le fichier est gardé dans IndexedDB.
+  function bindAuto(){
+    if(!window.showSaveFilePicker||!window.indexedDB) return;
+    $("autoPanel").hidden=false;
+    const AK="assistinvest-auto";
+    let cfg=null; try{cfg=JSON.parse(localStorage.getItem(AK)||"null");}catch(e){}
+    let handle=null, granted=false, timer=null, busy=false, again=false, lastErr="";
+    const db=()=>new Promise((ok,ko)=>{const r=indexedDB.open("assistinvest",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error);});
+    const idb=async(mode,fn)=>{const d=await db();return new Promise((ok,ko)=>{const t=d.transaction("kv",mode);const q=fn(t.objectStore("kv"));t.oncomplete=()=>ok(q&&q.result);t.onerror=()=>ko(t.error);});};
+    const hm=t=>new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+    function ui(){
+      const on=!!(cfg&&handle);
+      $("autoSetup").hidden=on; $("aStop").hidden=!on; $("aResume").hidden=!(on&&!granted);
+      $("autoStatus").textContent=!on?"Pas encore activée sur cet ordinateur."
+        :!granted?`En pause : votre navigateur demande de confirmer l'accès au fichier « ${handle.name} ». Touchez « Reprendre ».`
+        :lastErr?`Problème avec le fichier « ${handle.name} » : ${lastErr}`
+        :`Active : fichier « ${handle.name} »${cfg.last?`, dernière sauvegarde le ${hm(cfg.last)}`:""}.`;
+    }
+    async function write(){
+      if(!cfg||!handle||!granted) return;
+      if(busy){again=true;return;} busy=true;
+      try{
+        const at=Date.now(), upd=S.updatedAt||at, data={...S,updatedAt:upd,lastBackup:at};
+        const text=JSON.stringify({...await encrypt(JSON.stringify(data),cfg.pw),exportedAt:at,updatedAt:upd,hint:cfg.hint||"",auto:true});
+        const w=await handle.createWritable(); await w.write(text); await w.close();
+        S.lastBackup=at; persist(); cfg.last=at; localStorage.setItem(AK,JSON.stringify(cfg)); lastErr=""; render();
+      }catch(e){ lastErr=e&&e.name==="NotAllowedError"?"accès refusé.":"écriture impossible (fichier déplacé ou supprimé ?)."; if(e&&e.name==="NotAllowedError") granted=false; }
+      finally{ busy=false; ui(); if(again){again=false; write();} }
+    }
+    window.__autoQueue=()=>{ clearTimeout(timer); timer=setTimeout(write,2000); };
+    document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"&&timer){ clearTimeout(timer); timer=null; write(); } });
+    $("aStart").addEventListener("click",async()=>{
+      const pw=$("aPwd").value, hint=$("aHint").value.trim();
+      if(pw.length<6){toast("Choisissez un mot de passe d'au moins 6 caractères");$("aPwd").focus();return;}
+      if(pw!==$("aPwd2").value){toast("Les deux mots de passe sont différents");$("aPwd2").focus();return;}
+      if(hint&&hint.toLowerCase().includes(pw.toLowerCase())){toast("L'indice ne doit pas contenir le mot de passe");$("aHint").focus();return;}
+      try{ handle=await window.showSaveFilePicker({suggestedName:"assistinvest-sauvegarde-auto.json",types:[{description:"Sauvegarde AssistInvest",accept:{"application/json":[".json"]}}]}); }
+      catch(e){ if(!(e&&e.name==="AbortError")) toast("Impossible de choisir un fichier ici"); return; }
+      cfg={pw,hint}; localStorage.setItem(AK,JSON.stringify(cfg)); await idb("readwrite",st=>st.put(handle,"autoFile"));
+      granted=true; $("aPwd").value=$("aPwd2").value=""; markPlan("backup"); await write();
+      toast("Sauvegarde automatique activée. Notez aussi votre mot de passe en lieu sûr.");
+    });
+    $("aResume").addEventListener("click",async()=>{
+      try{ granted=(await handle.requestPermission({mode:"readwrite"}))==="granted"; }catch(e){ granted=false; }
+      ui(); if(granted) write();
+    });
+    $("aStop").addEventListener("click",async()=>{
+      if(!confirm("Arrêter la sauvegarde automatique sur cet ordinateur ? Le fichier déjà enregistré reste en place.")) return;
+      cfg=null; handle=null; granted=false; localStorage.removeItem(AK); try{await idb("readwrite",st=>st.delete("autoFile"));}catch(e){}
+      ui(); toast("Sauvegarde automatique arrêtée");
+    });
+    (async()=>{
+      if(cfg){ try{ handle=await idb("readonly",st=>st.get("autoFile")); }catch(e){} }
+      if(handle){ try{ granted=(await handle.queryPermission({mode:"readwrite"}))==="granted"; }catch(e){} }
+      ui(); if(granted&&(S.updatedAt||0)>(cfg.last||0)) write();
+    })();
+  }
+
+  bind(); bindExtra(); bindAuto(); render();
 })();
 </script>
 
