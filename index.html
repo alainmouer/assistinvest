@@ -129,12 +129,10 @@ td .del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-s
 }
 .loupe a,.note a{color:var(--etf)}
 #jform.prefill{outline:2px solid var(--etf);outline-offset:3px}
-.syncbar{position:sticky;top:0;z-index:15;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:color-mix(in srgb,var(--warn) 14%,var(--surface));border-bottom:1px solid var(--line);padding:8px 16px;font-size:.9rem}
 button.reset{justify-self:start;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:6px 10px;font:500 .82rem var(--f-body);cursor:pointer}
 </style>
 </head>
 <body>
-<div class="syncbar" id="syncBar" hidden><span>Google Drive est déconnecté sur cet appareil. Vos modifications restent ici en attendant.</span><button class="btn" type="button" id="syncBarBtn">Reconnecter et synchroniser</button></div>
 
 
 <div class="wrap">
@@ -268,25 +266,17 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     <p class="note" id="peaInfo"></p>
   </section>
 
-  <section aria-labelledby="t-sync" id="syncSec" hidden>
-    <h2 id="t-sync">Synchronisation</h2>
-    <p class="lead">Connectez chaque appareil (téléphone, ordinateur) à votre compte Google : vos données sont enregistrées dans un fichier caché de votre Google Drive, que vous seul pouvez lire, et chaque appareil récupère automatiquement la version la plus récente.</p>
-    <div class="panel">
-      <p id="syncStatus" class="note" role="status">Pas encore connecté sur cet appareil.</p>
-      <div class="actions"><button class="btn" type="button" id="syncBtn">Se connecter à Google Drive</button><button class="btn ghost" type="button" id="syncOff" hidden>Déconnecter cet appareil</button></div>
-      <p class="note">À chaque ouverture de l'appli, touchez « Synchroniser » : Google redonne l'accès pour une heure, et pendant ce temps chaque modification est envoyée toute seule.</p>
-    </div>
-  </section>
-
   <section aria-labelledby="t-save">
     <h2 id="t-save">Sauvegarde</h2>
-    <p class="lead">Vos données restent sur cet appareil. Exportez une sauvegarde de temps en temps, par exemple après la revue de janvier. Sur téléphone, le menu de partage s'ouvre : choisissez Drive, puis le dossier AssistInvest › Sauvegardes. Vous pourrez la restaurer ici, sur ce téléphone ou un autre appareil.</p>
+    <p class="lead">Vos données restent sur cet appareil. Pour les retrouver sur votre téléphone et votre ordinateur, exportez une sauvegarde après chaque modification importante (versement, revue de janvier), rangez-la dans Google Drive (dossier AssistInvest › Sauvegardes), puis importez-la sur l'autre appareil.</p>
     <div class="panel">
+      <p id="bkStatus" class="note" role="status"></p>
       <label for="pwd">Mot de passe de la sauvegarde (facultatif, pour la chiffrer)
         <div class="field"><input id="pwd" type="password" autocomplete="new-password" placeholder="Laisser vide pour une sauvegarde non chiffrée"></div>
       </label>
       <p class="note">Notez ce mot de passe en lieu sûr : sans lui, une sauvegarde chiffrée ne peut pas être restaurée, ni par vous ni par personne.</p>
-      <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter et partager</button><label class="btn ghost" for="imp" style="display:inline-block">Restaurer une sauvegarde</label><input id="imp" type="file" accept="application/json,.json" hidden></div>
+      <div class="actions"><button class="btn ghost" type="button" id="exp">Exporter et partager</button><button class="btn ghost" type="button" id="impBtn">Importer une sauvegarde</button><input id="imp" type="file" hidden></div>
+      <p class="note">Importer remplace les données de cet appareil par celles du fichier choisi (sur téléphone, touchez « Parcourir » ou « Drive » pour aller le chercher).</p>
       <div id="decrypt" hidden style="display:grid;gap:8px">
         <label for="pwd2">Cette sauvegarde est chiffrée. Mot de passe :
           <div class="field"><input id="pwd2" type="password" autocomplete="current-password"></div>
@@ -296,7 +286,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     </div>
   </section>
 
-  <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos données restent enregistrées sur cet appareil, et dans votre Google Drive seulement si vous activez la synchronisation.</footer>
+  <footer>Outil d'organisation, pas un conseil en investissement personnalisé. Vérifiez les frais et le cours sur les fiches officielles avant chaque achat. Vos données restent enregistrées sur cet appareil, et dans les fichiers de sauvegarde que vous exportez.</footer>
 </div>
 
 <script>
@@ -306,7 +296,8 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
   let S={...DEFAULTS};
   try{const raw=localStorage.getItem(KEY); if(raw) S={...DEFAULTS,...JSON.parse(raw)};}catch(e){}
   const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
-  const save=()=>{S.updatedAt=Date.now(); persist(); if(window.__syncQueue) window.__syncQueue();};
+  const save=()=>{S.updatedAt=Date.now(); persist();};
+  try{localStorage.removeItem("assistinvest-sync");localStorage.removeItem("assistinvest-sync-token");}catch(e){} // restes de l'ancienne synchro Google Drive
   const $=id=>document.getElementById(id);
   const eur=v=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(Math.round(v));
   const pct=v=>Math.round(v*100)+" %";
@@ -373,6 +364,10 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
         todo.push(["warn","Rééquilibrer",`L'ETF pèse ${pct(share)} du PER (cible ${pct(t)})`,`Lors de la revue de janvier, arbitrer ${eur(move)} ${share>t?"de l'ETF vers le fonds euros":"du fonds euros vers l'ETF"}. Ne rien vendre d'autre.`]);
       }
     }
+    const bkDays=S.lastBackup?Math.floor((Date.now()-S.lastBackup)/86400000):null;
+    $("bkStatus").textContent=S.lastBackup?`Dernière sauvegarde exportée ${bkDays===0?"aujourd'hui":bkDays===1?"hier":"il y a "+bkDays+" jours"} (${new Date(S.lastBackup).toLocaleDateString("fr-FR")}).`:"Aucune sauvegarde exportée depuis cet appareil pour l'instant.";
+    if(perT+peaT+S.ctoCash>0 && (S.updatedAt||0)>(S.lastBackup||0)+60000 && (bkDays===null||bkDays>=30))
+      todo.push(["ok","Sauvegarde",bkDays===null?"Pensez à exporter une sauvegarde":`Dernière sauvegarde il y a ${bkDays} jours`,"Vos données ont changé depuis : exportez une sauvegarde (section « Sauvegarde » en bas) pour les retrouver sur vos autres appareils."]);
     if(perT+peaT+S.ctoCash===0) todo.push(["warn","Premier pas","Saisissez vos soldes","Remplissez la section « Mes soldes » plus bas avec les montants lus sur Linxea et Fortuneo. Ils restent enregistrés sur cet appareil uniquement."]);
     else if(!todo.length || todo.every(x=>x[0]==="ok")) todo.push(["ok","Tout va bien","Rien à faire avant votre prochain versement","Ne regardez pas les cours tous les jours : votre plan travaille pour vous."]);
     $("todo").innerHTML=todo.map(([k,l,b,s])=>`<li><span class="pill ${k}">${l}</span><div><b>${b}</b><small>${s}</small></div></li>`).join("");
@@ -484,7 +479,7 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       "Descendez à <b>Sauvegarde</b> et touchez <b>Exporter et partager</b>.",
       "Sur téléphone, le menu de partage s'ouvre : touchez <b>Drive</b>, choisissez le dossier <b>AssistInvest › Sauvegardes</b>, puis <b>Enregistrer</b>.",
       "Sur ordinateur, le fichier <b>assistinvest-sauvegarde-…json</b> arrive dans vos Téléchargements : glissez-le dans le dossier <b>AssistInvest › Sauvegardes</b> de Google Drive.",
-      "Pour restaurer sur un autre appareil : installez l'appli, puis <b>Restaurer une sauvegarde</b> et choisissez ce fichier (depuis Drive si besoin)."
+      "Sur l'autre appareil : ouvrez l'appli, puis <b>Importer une sauvegarde</b> et choisissez le fichier le plus récent dans Drive."
     ],"Refaites-le après chaque revue de janvier."]
   ];
   const fmtDate=d=>{try{return new Date(d+"T12:00:00").toLocaleDateString("fr-FR");}catch(e){return d;}};
@@ -614,9 +609,14 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
     $("ics").addEventListener("click",ics);
     $("exp").addEventListener("click",async()=>{
       const pw=$("pwd").value;
-      let text=JSON.stringify({app:"assistinvest",v:1,data:S},null,2), name=`assistinvest-sauvegarde-${today()}.json`;
-      if(pw){ try{ text=JSON.stringify(await encrypt(JSON.stringify(S),pw)); name=`assistinvest-sauvegarde-chiffree-${today()}.json`; }catch(e){ toast("Chiffrement impossible sur cet appareil"); return; } }
-      const done=how=>{markPlan("backup");save();render();toast((pw?"Sauvegarde chiffrée ":"Sauvegarde ")+how);};
+      // Horodatage : updatedAt = dernière modification des données (sert à comparer à l'import), exportedAt = moment de l'export.
+      const at=Date.now(), upd=S.updatedAt||at, n=new Date(at);
+      const data={...S,updatedAt:upd,plan:{...S.plan,backup:S.plan.backup||today()},lastBackup:at};
+      const stamp=`${today()}-${String(n.getHours()).padStart(2,"0")}h${String(n.getMinutes()).padStart(2,"0")}`;
+      let text=JSON.stringify({app:"assistinvest",v:1,exportedAt:at,updatedAt:upd,data},null,2), name=`assistinvest-sauvegarde-${stamp}.json`;
+      if(pw){ try{ text=JSON.stringify({...await encrypt(JSON.stringify(data),pw),exportedAt:at,updatedAt:upd}); name=`assistinvest-sauvegarde-chiffree-${stamp}.json`; }catch(e){ toast("Chiffrement impossible sur cet appareil"); return; } }
+      // Pas de save() ici : la date de modification reste celle du fichier, pour qu'il soit reconnu comme « même version ».
+      const done=how=>{S.plan=data.plan;S.updatedAt=upd;S.lastBackup=at;persist();render();toast((pw?"Sauvegarde chiffrée ":"Sauvegarde ")+how);};
       try{
         const file=new File([text],name,{type:"application/json"});
         if(navigator.canShare&&navigator.canShare({files:[file]})){
@@ -627,122 +627,42 @@ button.reset{justify-self:start;border:1px solid var(--line);background:transpar
       if(download(name,"application/json",text)) done("enregistrée dans vos Téléchargements");
     });
     let PENDING=null;
-    function restore(d){ S={...DEFAULTS,...d}; save(); fields.forEach(k=>$(k).value=S[k]); render(); toast("Sauvegarde restaurée"); }
+    const when=t=>new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).replace(/,? (\d\d):(\d\d)$/," à $1 h $2");
+    // Compare la date de modification du fichier à celle de cet appareil. Renvoie true si l'import peut continuer.
+    function okToImport(fileUpd){
+      const loc=S.updatedAt||0;
+      if(!loc) return true; // appareil vierge
+      if(!fileUpd) return confirm("Cette sauvegarde ne dit pas quand ses données ont été modifiées (ancien format).\n\nRemplacer les données de cet appareil par celles du fichier ?");
+      if(fileUpd===loc){ toast("Cet appareil a déjà cette version : rien à importer"); return false; }
+      if(fileUpd<loc) return confirm(`Attention : cette sauvegarde est plus ancienne que les données de cet appareil.\n\nSauvegarde : modifiée le ${when(fileUpd)}\nCet appareil : modifié le ${when(loc)}\n\nSi vous importez, vous perdrez vos dernières modifications. Importer quand même ?`);
+      return confirm(`Cette sauvegarde est plus récente que les données de cet appareil.\n\nSauvegarde : modifiée le ${when(fileUpd)}\nCet appareil : modifié le ${when(loc)}\n\nRemplacer les données de cet appareil par celles de la sauvegarde ?`);
+    }
+    function restore(d,checked){
+      if(!checked&&!okToImport(d.updatedAt)){ if(S.updatedAt!==d.updatedAt) toast("Import annulé"); return; }
+      S={...DEFAULTS,...d}; persist(); fields.forEach(k=>$(k).value=S[k]);
+      [["tmi","tmi"],["profile","profile"]].forEach(([id,k])=>$(id).querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.v===S[k]))));
+      render(); toast("Sauvegarde importée");
+    }
+    $("impBtn").addEventListener("click",()=>$("imp").click());
     $("imp").addEventListener("change",()=>{
       const f=$("imp").files[0]; if(!f)return;
       const r=new FileReader();
       r.onload=()=>{try{
         const d=JSON.parse(r.result); if(typeof d!=="object"||!d)throw 0;
-        if(d.enc==="AES-GCM"){PENDING=d; $("decrypt").hidden=false; $("pwd2").value=""; $("pwd2").focus(); return;}
+        if(d.enc==="AES-GCM"){ if(d.updatedAt&&!okToImport(d.updatedAt)){ if(S.updatedAt!==d.updatedAt) toast("Import annulé"); return; } PENDING=d; $("decrypt").hidden=false; $("pwd2").value=""; $("pwd2").focus(); return;}
         restore(d.app==="assistinvest"&&d.data?d.data:d);
       }catch(err){toast("Ce fichier n'est pas une sauvegarde AssistInvest valide");}};
       r.readAsText(f); $("imp").value="";
     });
     $("dec").addEventListener("click",async()=>{
       if(!PENDING)return;
-      try{ const d=JSON.parse(await decrypt(PENDING,$("pwd2").value)); PENDING=null; $("decrypt").hidden=true; restore(d); }
+      try{ const d=JSON.parse(await decrypt(PENDING,$("pwd2").value)); const known=!!PENDING.updatedAt; PENDING=null; $("decrypt").hidden=true; restore(d,known); }
       catch(e){ toast("Mot de passe incorrect"); $("pwd2").select(); }
     });
     $("decCancel").addEventListener("click",()=>{PENDING=null;$("decrypt").hidden=true;});
   }
 
-  function bindSync(){
-    const CLIENT_ID="629004813652-b5vbmb4v70gp3aurr9r83tl4n2q2jmvl.apps.googleusercontent.com"; // ID client OAuth (Google Cloud > Clients), pas secret
-    const SCOPE="https://www.googleapis.com/auth/drive.appdata", FILE="assistinvest-sync.json", API="https://www.googleapis.com";
-    const MK="assistinvest-sync"; // métadonnées propres à cet appareil
-    if(!CLIENT_ID) return;
-    $("syncSec").hidden=false;
-    let meta={}; try{meta=JSON.parse(localStorage.getItem(MK)||"{}");}catch(e){}
-    const putMeta=()=>{try{localStorage.setItem(MK,JSON.stringify(meta));}catch(e){}};
-    const TK="assistinvest-sync-token"; // jeton d'accès Drive (1 h max), gardé pour survivre à un rechargement ou redémarrage
-    let token=null, exp=0, client=null, timer=null, busy=false, again=false;
-    try{const k=JSON.parse(localStorage.getItem(TK)||"null"); if(k&&k.exp>Date.now()+60000){token=k.t;exp=k.exp;}}catch(e){}
-    const putTok=()=>{try{token?localStorage.setItem(TK,JSON.stringify({t:token,exp})):localStorage.removeItem(TK);}catch(e){}};
-    const live=()=>token&&Date.now()<exp-60000;
-    const hm=t=>new Date(t).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
-    function ui(msg){
-      if(msg) $("syncStatus").textContent=msg;
-      else if(meta.on) $("syncStatus").textContent=(live()?"Connecté. ":"Connexion à renouveler. ")+(meta.last?"Dernière synchronisation : "+hm(meta.last)+".":"");
-      $("syncBtn").textContent=meta.on?"Synchroniser":"Se connecter à Google Drive";
-      $("syncOff").hidden=!meta.on;
-      $("syncBar").hidden=!(meta.on&&!live());
-    }
-    function loadGis(){return new Promise((ok,ko)=>{if(window.google&&google.accounts&&google.accounts.oauth2)return ok();const sc=document.createElement("script");sc.src="https://accounts.google.com/gsi/client";sc.async=true;sc.onload=()=>ok();sc.onerror=()=>ko(new Error("gis"));document.head.appendChild(sc);});}
-    async function api(path,opt={}){
-      const r=await fetch(API+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+token}});
-      if(r.status===401){token=null;putTok();throw new Error("auth");}
-      if(!r.ok) throw new Error("http "+r.status);
-      return r;
-    }
-    async function findFile(){
-      const q=encodeURIComponent(`name='${FILE}'`);
-      const j=await (await api(`/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id)&pageSize=1`)).json();
-      return j.files&&j.files[0]?j.files[0].id:null;
-    }
-    async function upload(id){
-      const body=JSON.stringify({app:"assistinvest",v:1,updatedAt:S.updatedAt||Date.now(),data:S});
-      if(id){ await api(`/upload/drive/v3/files/${id}?uploadType=media`,{method:"PATCH",headers:{"Content-Type":"application/json"},body}); return id; }
-      const b="ai"+Math.random().toString(36).slice(2);
-      const mp=`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({name:FILE,parents:["appDataFolder"]})}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${b}--`;
-      const j=await (await api(`/upload/drive/v3/files?uploadType=multipart&fields=id`,{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+b},body:mp})).json();
-      return j.id;
-    }
-    function apply(remote){
-      S={...DEFAULTS,...remote.data,updatedAt:remote.updatedAt}; persist();
-      fields.forEach(k=>$(k).value=S[k]); if($("peaOpen")) $("peaOpen").value=S.peaOpen||"";
-      render(); toast("Données mises à jour depuis Google Drive");
-    }
-    async function sync(){
-      if(!live()) { ui(); return; }
-      if(busy){again=true;return;} busy=true;
-      try{
-        ui("Synchronisation…");
-        const id=await findFile();
-        const local=S.updatedAt||0;
-        if(!id){ meta.id=await upload(null); meta.base=local; }
-        else{
-          meta.id=id;
-          const remote=await (await api(`/drive/v3/files/${id}?alt=media`)).json();
-          const rt=remote.updatedAt||0;
-          if(rt===local){ /* déjà à jour */ }
-          else{
-            const first=meta.base==null, both=!first&&local>meta.base&&rt>meta.base;
-            let useRemote=rt>local;
-            if(first&&!local) useRemote=true;
-            else if(first||both){
-              useRemote=confirm((first?"Des données AssistInvest existent déjà dans votre Google Drive":"Les données ont été modifiées sur cet appareil et sur un autre")+` (Drive : ${hm(rt)}, cet appareil : ${local?hm(local):"aucune modification"}).\n\nOK : utiliser les données de Google Drive sur cet appareil.\nAnnuler : remplacer celles de Google Drive par celles de cet appareil.`);
-            }
-            if(useRemote) apply(remote); else await upload(id);
-          }
-          meta.base=S.updatedAt||0;
-        }
-        meta.on=true; meta.last=Date.now(); putMeta(); ui();
-      }catch(e){ ui(e.message==="auth"?"La connexion a expiré : touchez « Synchroniser ».":"Synchronisation impossible pour le moment (pas de réseau ?). Vos données restent sur cet appareil."); }
-      finally{ busy=false; if(again){again=false; sync();} }
-    }
-    window.__syncQueue=()=>{ if(!live())return; clearTimeout(timer); timer=setTimeout(sync,1500); };
-    async function connect(){
-      if(live()) return sync();
-      try{ await loadGis(); }catch(e){ ui("Impossible de joindre Google. Vérifiez la connexion Internet."); return; }
-      if(!client) client=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPE,callback:r=>{
-        if(r&&r.access_token){ token=r.access_token; exp=Date.now()+(+r.expires_in||3600)*1000; putTok(); sync(); }
-        else ui("Connexion refusée ou annulée.");
-      },error_callback:()=>ui("Connexion annulée.")});
-      client.requestAccessToken({prompt:meta.on?"":"consent"});
-    }
-    $("syncBtn").addEventListener("click",connect);
-    $("syncBarBtn").addEventListener("click",connect);
-    if(meta.on) loadGis().catch(()=>{}); // prépare Google pour que la reconnexion tienne en un clic
-    setInterval(()=>{ if(meta.on&&!live()) ui(); },60000); // affiche le bandeau quand le jeton expire
-    $("syncOff").addEventListener("click",()=>{
-      if(token&&window.google) try{google.accounts.oauth2.revoke(token,()=>{});}catch(e){}
-      token=null; putTok(); meta={}; putMeta(); ui("Cet appareil n'est plus synchronisé. Vos données restent ici et dans Google Drive.");
-    });
-    document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") sync(); });
-    ui(); if(live()) sync();
-  }
-
-  bind(); bindExtra(); bindSync(); render();
+  bind(); bindExtra(); render();
 })();
 </script>
 
